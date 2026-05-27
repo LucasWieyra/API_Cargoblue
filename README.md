@@ -1,19 +1,39 @@
-# 🎈 Blank app template
+# Central Raster + Omnilink/WSTT
 
-A simple Streamlit app template for you to modify!
+Projeto Streamlit para sincronizar e analisar as APIs Raster e Omnilink/WSTT com Supabase.
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://blank-app-template.streamlit.app/)
+## Importante sobre Supabase
 
-### How to run it on your own machine
+A tabela `public.raster_checklist_resultado` já pode existir no seu Supabase. Se ela já existe, não precisa recriar nem executar o SQL dessa tabela novamente.
 
-1. Install the requirements
+O app apenas lê e grava nela usando `upsert` pela chave `cod_resultado`.
 
-   ```
-   $ pip install -r requirements.txt
-   ```
+## Rodar no Windows
 
-2. Run the app
+```bat
+py -m pip install -r requirements.txt
+py -m streamlit run app.py --server.address 0.0.0.0 --server.port 8501
+```
 
-   ```
-   $ streamlit run streamlit_app.py
-   ```
+## Terminal do sistema
+
+A página `Terminal` mostra os logs gravados na tabela `integracao_execucoes` e ajuda a acompanhar as rotinas executadas.
+
+## Checklist Raster
+
+A aba Raster possui a tabela `Resultado checklist`, que usa a estrutura existente:
+
+- cod_resultado
+- cod_checklist
+- veiculo
+- cod_filial
+- cod_perfil_seguranca
+- status
+- resultado
+- apto
+- data_geracao
+- data_expiracao
+- url_documento
+- produtos
+- raw
+- synced_at
