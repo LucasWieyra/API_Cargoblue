@@ -1,23 +1,39 @@
-# Checklist Raster — todos os status
+# Central Raster + Omnilink/WSTT
 
-Esta versão mantém a regra principal: o app **não cria checklist** e **não chama `setIncluirCheckList`**.
+Projeto Streamlit para sincronizar e analisar as APIs Raster e Omnilink/WSTT com Supabase.
 
-Fluxo usado:
+## Importante sobre Supabase
 
-1. `getTabela` para apoio: FILIAIS, PERFIL_SEGURANCA e PRODUTOS.
-2. `getHistoricoTestes` para localizar CodCheckList existentes por placa.
-3. `getGerarResultadoCheckList` para consultar o resultado/status oficial.
+A tabela `public.raster_checklist_resultado` já pode existir no seu Supabase. Se ela já existe, não precisa recriar nem executar o SQL dessa tabela novamente.
 
-A tela agora mostra todos os status retornados pela Raster:
+O app apenas lê e grava nela usando `upsert` pela chave `cod_resultado`.
 
-- ST = Sem teste
-- AI = Aguardando início
-- AE = Aguardando espelhamento
-- CV = Configurando veículo
-- ET = Teste em execução
-- FI = Finalizado
-- CA = Cancelado
+## Rodar no Windows
 
-A tabela operacional não mostra `raw`, `CodErro`, `MsgErro` ou erro técnico. Esses campos ficam apenas no banco/log para diagnóstico.
+```bat
+py -m pip install -r requirements.txt
+py -m streamlit run app.py --server.address 0.0.0.0 --server.port 8501
+```
 
-`DataGeracao` e `DataExpiracao` aparecem quando a Raster devolver esses campos, normalmente no status FI.
+## Terminal do sistema
+
+A página `Terminal` mostra os logs gravados na tabela `integracao_execucoes` e ajuda a acompanhar as rotinas executadas.
+
+## Checklist Raster
+
+A aba Raster possui a tabela `Resultado checklist`, que usa a estrutura existente:
+
+- cod_resultado
+- cod_checklist
+- veiculo
+- cod_filial
+- cod_perfil_seguranca
+- status
+- resultado
+- apto
+- data_geracao
+- data_expiracao
+- url_documento
+- produtos
+- raw
+- synced_at
