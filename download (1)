@@ -1,4 +1,36 @@
-.env
-__pycache__/
-*.pyc
-.streamlit/secrets.toml
+# ============================================================
+# Streamlit Cloud — Secrets
+# ============================================================
+# Cole este conteúdo em: Settings > Secrets no painel do Streamlit Cloud
+# NÃO suba o secrets.toml real para o GitHub (já está no .gitignore)
+# ============================================================
+
+# --- Supabase ---
+SUPABASE_URL = "https://xxxxxxxxxxxx.supabase.co"
+SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+# --- Dashboard login ---
+DASHBOARD_USER = "Admin"
+DASHBOARD_PASSWORD = "sua_senha_aqui"
+
+# --- Raster API ---
+RASTER_LOGIN = "seu_login_raster"
+RASTER_SENHA = "sua_senha_raster"
+RASTER_BASE_URL = "https://integra.logae.com.br/datasnap/rest/TWebService"
+RASTER_AMBIENTE = "Producao"
+RASTER_TIPO_RETORNO = "JSON"
+RASTER_COD_FILIAL = "6278"
+RASTER_COD_PERFIL_SEGURANCA = "14341"
+RASTER_PRODUTOS = '[{"CodProduto":2134,"Valor":1}]'
+RASTER_VALOR_PRODUTO = "1"
+RASTER_EVENTO_FIM_DIAS = "1"
+RASTER_EVENTO_FIM_STATUS = "F"
+RASTER_TIMEOUT_SECONDS = "20"
+RASTER_DELAY_CHECKLIST_SECONDS = "12"
+RASTER_MAX_CHECKLIST_POR_RODADA = "5"
+RASTER_LIMITE_HISTORICO_PLACAS = "20"
+
+# --- Omnilink/WSTT ---
+WSTT_USUARIO = "seu_usuario_wstt"
+WSTT_SENHA = "sua_senha_wstt"
+WSTT_URL = "https://wstt.omnilink.com.br/iasws/iasws.asmx"

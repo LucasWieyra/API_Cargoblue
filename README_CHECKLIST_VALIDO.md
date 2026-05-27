@@ -1,23 +1,24 @@
-# Checklist Raster — todos os status
+# Checklist Raster — somente consulta, sem criação
 
-Esta versão mantém a regra principal: o app **não cria checklist** e **não chama `setIncluirCheckList`**.
+Esta versão não chama `setIncluirCheckList`.
 
 Fluxo usado:
 
-1. `getTabela` para apoio: FILIAIS, PERFIL_SEGURANCA e PRODUTOS.
-2. `getHistoricoTestes` para localizar CodCheckList existentes por placa.
-3. `getGerarResultadoCheckList` para consultar o resultado/status oficial.
+1. `getTabela` para FILIAIS, PERFIL_SEGURANCA, PRODUTOS e ERROS_WEBSERVICE.
+2. `getHistoricoTestes` por placa para descobrir checklists existentes.
+3. `getGerarResultadoCheckList` usando CodCheckList + CodFilial + CodPerfilSeguranca + Produtos.
+4. Resultado válido somente quando `DataGeracao` e `DataExpiracao` vêm preenchidas.
 
-A tela agora mostra todos os status retornados pela Raster:
+Defaults colocados no `.env`:
 
-- ST = Sem teste
-- AI = Aguardando início
-- AE = Aguardando espelhamento
-- CV = Configurando veículo
-- ET = Teste em execução
-- FI = Finalizado
-- CA = Cancelado
+```env
+RASTER_COD_FILIAL="6278"
+RASTER_COD_PERFIL_SEGURANCA="14341"
+RASTER_PRODUTOS='[{"CodProduto":2134,"Valor":1}]'
+RASTER_VALOR_PRODUTO="1"
+```
 
-A tabela operacional não mostra `raw`, `CodErro`, `MsgErro` ou erro técnico. Esses campos ficam apenas no banco/log para diagnóstico.
+Perfil 14341: DDR SHOPEE - LINE HAUL OWN FLEET - FROTA - ESSOR.
+Produto 2134: 00 - PRODUTOS DIVERSOS.
 
-`DataGeracao` e `DataExpiracao` aparecem quando a Raster devolver esses campos, normalmente no status FI.
+Se a Raster retornar `Status` diferente de `FI`, ou sem `DataGeracao`/`DataExpiracao`, o registro fica salvo no raw para diagnóstico, mas não entra no contador de resultados válidos.
