@@ -412,13 +412,15 @@ def apply_filters(df: pd.DataFrame, plate_filter: str = "", search_text: str = "
     if plate_filter:
         plate_cols = [c for c in out.columns if "placa" in c.lower() or c.lower() == "veiculo"]
         if plate_cols:
-            mask = False
+            mask = None
             for col in plate_cols:
                 try:
-                    mask = mask | normalize_plate_series(out[col]).str.contains(plate_filter, na=False)
+                    col_mask = normalize_plate_series(out[col]).str.contains(plate_filter, na=False)
+                    mask = col_mask if mask is None else (mask | col_mask)
                 except Exception:
                     pass
-            out = out[mask] if not isinstance(mask, bool) else out
+            if mask is not None:
+                out = out[mask]
     if search_text:
         txt = search_text.lower().strip()
         mask = out.astype(str).apply(lambda row: row.str.lower().str.contains(txt, na=False)).any(axis=1)
@@ -1258,7 +1260,7 @@ elif page_key == "Terminal":
         st.caption("Essa área não aparece nas tabelas operacionais. Use apenas para copiar o erro real quando a Raster retornar HTTP_ERROR.")
         diag = df_table("integracao_execucoes", "origem,rotina,status,qtd_registros,erro,executado_em", 50, "executado_em")
         if not diag.empty:
-            diag = diag[(diag.get("origem") == "Raster") & (diag.get("status") == "erro")] if "origem" in diag.columns and "status" in diag.columns else diag
+            diag = diag[(diag["origem"] == "Raster") & (diag["status"] == "erro")] if "origem" in diag.columns and "status" in diag.columns else diag
         show_dataframe(diag, height=360, search_text=global_search)
 
 elif page_key == "Supabase / SQL":
