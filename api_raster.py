@@ -196,12 +196,59 @@ def sync_sm_abertas() -> int:
         raise
 
 
+def _evento_fim_payload() -> dict[str, Any]:
+    """Payload seguro para getEventoFimViagem.
+
+    Chamar esse método sem filtro pode ser pesado e, em alguns ambientes Raster,
+    retorna HTTP_ERROR sem detalhar no painel. Por isso enviamos um período curto
+    por padrão. Os campos abaixo podem ser controlados por Secrets/.env:
+      RASTER_EVENTO_FIM_DIAS=1
+      RASTER_EVENTO_FIM_STATUS=F
+    """
+    from datetime import date, timedelta
+
+    dias = to_int(_env("RASTER_EVENTO_FIM_DIAS", "1")) or 1
+    if dias < 1:
+        dias = 1
+    if dias > 7:
+        dias = 7
+
+    hoje = date.today()
+    inicio = hoje - timedelta(days=dias - 1)
+    payload: dict[str, Any] = {
+        "DataInicial": inicio.isoformat(),
+        "DataFinal": hoje.isoformat(),
+    }
+
+    status = _env("RASTER_EVENTO_FIM_STATUS", "F")
+    if status:
+        payload["StatusViagem"] = status
+
+    placa = _env("RASTER_EVENTO_FIM_PLACA", "")
+    if placa:
+        payload["Placa"] = placa
+
+    return payload
+
+
+def _resumo_erro_raster(data: dict[str, Any]) -> str:
+    try:
+        return json.dumps(data, ensure_ascii=False, default=str)[:6000]
+    except Exception:
+        return str(data)[:6000]
+
+
 def sync_evento_fim_viagem() -> int:
     rotina = "Evento fim viagem"
     try:
-        data = call_raster("getEventoFimViagem", {})
+        payload = _evento_fim_payload()
+        data = call_raster("getEventoFimViagem", payload)
         if not _ok(data):
-            erro = f"Raster retornou erro: {data.get('MsgErro')} / {data.get('CodErro')}"
+            erro = _resumo_erro_raster({
+                "mensagem": "Raster retornou erro em getEventoFimViagem",
+                "payload_enviado": payload,
+                "retorno_raster": data,
+            })
             log_execucao(rotina, "erro", 0, erro)
             print(erro)
             return 0

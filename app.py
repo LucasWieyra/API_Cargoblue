@@ -1254,6 +1254,13 @@ elif page_key == "Terminal":
     st.subheader("Tabela de execuções")
     show_dataframe(df_table("integracao_execucoes", "origem,rotina,status,qtd_registros,executado_em", 500, "executado_em"), height=420, search_text=global_search)
 
+    with st.expander("Diagnóstico técnico do último erro Raster", expanded=False):
+        st.caption("Essa área não aparece nas tabelas operacionais. Use apenas para copiar o erro real quando a Raster retornar HTTP_ERROR.")
+        diag = df_table("integracao_execucoes", "origem,rotina,status,qtd_registros,erro,executado_em", 50, "executado_em")
+        if not diag.empty:
+            diag = diag[(diag.get("origem") == "Raster") & (diag.get("status") == "erro")] if "origem" in diag.columns and "status" in diag.columns else diag
+        show_dataframe(diag, height=360, search_text=global_search)
+
 elif page_key == "Supabase / SQL":
     render_sync_panel("Estrutura Supabase", "Consulta de referência da estrutura. Se suas tabelas já existem no Supabase, não precisa recriar; o app usa as tabelas existentes e faz upsert nos dados.")
     st.markdown("<div class='warn-box'><b>Observação:</b> como a tabela <code>raster_checklist_resultado</code> já existe no seu Supabase, não precisa criar de novo. Esta aba é só referência/conferência.</div>", unsafe_allow_html=True)
