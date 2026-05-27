@@ -93,7 +93,7 @@ def call_raster(metodo: str, body: dict[str, Any] | None = None) -> dict[str, An
 
     for url in urls:
         try:
-            response = requests.post(url, json=payload, timeout=180)
+            response = requests.post(url, json=payload, timeout=int(_env("RASTER_TIMEOUT_SECONDS", "20") or 20))
             response.raise_for_status()
             data = response.json()
             if isinstance(data, dict) and isinstance(data.get("result"), list) and data["result"]:
@@ -201,7 +201,10 @@ def sync_evento_fim_viagem() -> int:
     try:
         data = call_raster("getEventoFimViagem", {})
         if not _ok(data):
-            raise RuntimeError(f"Raster retornou erro: {data.get('MsgErro')} / {data.get('CodErro')}")
+            erro = f"Raster retornou erro: {data.get('MsgErro')} / {data.get('CodErro')}"
+            log_execucao(rotina, "erro", 0, erro)
+            print(erro)
+            return 0
 
         viagens = _list_from(data, "Viagens", "Viagem")
         rows: list[dict[str, Any]] = []

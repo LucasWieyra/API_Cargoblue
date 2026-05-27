@@ -570,9 +570,13 @@ def auto_cycle(rotinas: list[str], dias_viagens: int, dias_telemetria: int, limi
 
     if "Raster viagens" in rotinas:
         terminal_log("Iniciando Raster • viagens finalizadas")
-        qtd = api_raster.sync_evento_fim_viagem()
-        logs.append(f"Raster viagens finalizadas: {qtd}")
-        terminal_log(f"Finalizado Raster • viagens finalizadas: {qtd} registro(s)", "OK")
+        try:
+            qtd = api_raster.sync_evento_fim_viagem()
+            logs.append(f"Raster viagens finalizadas: {qtd}")
+            terminal_log(f"Finalizado Raster • viagens finalizadas: {qtd} registro(s)", "OK")
+        except Exception as exc:
+            logs.append(f"Raster viagens finalizadas: ignorada por erro ({exc})")
+            terminal_log(f"Erro Raster • viagens finalizadas: {exc}", "ERRO")
 
     if "WSTT frota" in rotinas:
         terminal_log("Iniciando WSTT • frota")
@@ -651,7 +655,7 @@ def controle_automatico():
             "WSTT telemetria",
             "WSTT eventos",
         ],
-        default=["Raster SM", "Raster viagens", "Raster checklist existente válido", "WSTT frota", "WSTT viagens", "WSTT telemetria", "WSTT eventos"],
+        default=["Raster SM", "Raster checklist existente válido", "WSTT frota", "WSTT viagens", "WSTT telemetria", "WSTT eventos"],
     )
 
     st.sidebar.caption("Checklist automático roda junto no mesmo ciclo, mas somente consulta checklists existentes; não cria nada.")
@@ -866,9 +870,16 @@ elif page_key == "Raster":
         if st.button("🚚 Viagens finalizadas", use_container_width=True):
             terminal_log("Iniciando Raster • viagens finalizadas")
             with st.spinner("Buscando eventos de fim de viagem..."):
-                qtd = api_raster.sync_evento_fim_viagem()
-                terminal_log(f"Finalizado Raster • viagens finalizadas: {qtd} registro(s)", "OK")
-                st.success(f"{qtd} viagem(ns) sincronizada(s).")
+                try:
+                    qtd = api_raster.sync_evento_fim_viagem()
+                    terminal_log(f"Finalizado Raster • viagens finalizadas: {qtd} registro(s)", "OK")
+                    if qtd == 0:
+                        st.warning("A Raster não retornou viagens finalizadas agora. O app não travou; veja o Terminal/Logs para detalhes.")
+                    else:
+                        st.success(f"{qtd} viagem(ns) sincronizada(s).")
+                except Exception as exc:
+                    terminal_log(f"Erro Raster • viagens finalizadas: {exc}", "ERRO")
+                    st.warning("Erro ao consultar viagens finalizadas da Raster. A rotina foi ignorada para não derrubar o app.")
     with b3:
         if st.button("📚 getTabela apoio", use_container_width=True):
             terminal_log("Iniciando Raster • getTabela FILIAIS/PERFIL/PRODUTOS/ERROS")
