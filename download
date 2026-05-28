@@ -1,6 +1,10 @@
-.env
-.venv/
-__pycache__/
-*.pyc
-*.log
-.DS_Store
+[theme]
+base = "dark"
+primaryColor = "#38BDF8"
+backgroundColor = "#020617"
+secondaryBackgroundColor = "#0F172A"
+textColor = "#F8FAFC"
+font = "sans serif"
+
+[server]
+headless = true

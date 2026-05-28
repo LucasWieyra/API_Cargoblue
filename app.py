@@ -46,6 +46,16 @@ st.set_page_config(
 
 CSS = """
 <style>
+html, body, [data-testid="stAppViewContainer"], .stApp {
+    background: #020617 !important;
+    color: #F8FAFC !important;
+}
+[data-testid="stHeader"] {
+    background: rgba(2, 6, 23, 0.82) !important;
+}
+[data-testid="stToolbar"] {
+    color: #F8FAFC !important;
+}
 :root {
     --bg: #020617;
     --bg-2: #081224;
