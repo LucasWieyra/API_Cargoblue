@@ -569,3 +569,48 @@ alter table public.raster_checklist_solicitacoes add column if not exists synced
 
 create index if not exists idx_raster_checklist_solicitacoes_cod on public.raster_checklist_solicitacoes using btree (cod_checklist);
 create index if not exists idx_raster_checklist_solicitacoes_veiculo on public.raster_checklist_solicitacoes using btree (veiculo);
+
+-- ============================================================
+-- AJUSTE STATUS VIAGEM - DOCUMENTOS CTE / CARGA
+-- Mantém compatibilidade com versões antigas da tabela.
+-- ============================================================
+
+alter table public.raster_status_viagem_documentos add column if not exists chave_status_viagem text;
+alter table public.raster_status_viagem_documentos add column if not exists placa_veiculo text;
+alter table public.raster_status_viagem_documentos add column if not exists tipo text;
+alter table public.raster_status_viagem_documentos add column if not exists numero text;
+alter table public.raster_status_viagem_documentos add column if not exists origem text;
+alter table public.raster_status_viagem_documentos add column if not exists raw jsonb;
+alter table public.raster_status_viagem_documentos add column if not exists synced_at timestamptz default now();
+
+update public.raster_status_viagem_documentos
+set
+  tipo = upper(coalesce(tipo, tipo_documento, raw->>'Tipo', raw->>'tipo')),
+  numero = coalesce(numero, numero_documento, raw->>'Numero', raw->>'numero'),
+  placa_veiculo = coalesce(placa_veiculo, placa),
+  origem = coalesce(origem, 'getStatusViagem')
+where
+  tipo is null
+  or numero is null
+  or placa_veiculo is null
+  or origem is null;
+
+create index if not exists idx_raster_status_viagem_docs_tipo on public.raster_status_viagem_documentos using btree (tipo);
+create index if not exists idx_raster_status_viagem_docs_numero_clean on public.raster_status_viagem_documentos using btree (numero);
+
+create or replace view public.vw_raster_status_viagem_documentos as
+select
+  id,
+  chave,
+  chave_status_viagem,
+  placa_veiculo,
+  cod_solicitacao,
+  cod_pre_solicitacao,
+  tipo,
+  numero,
+  origem,
+  synced_at
+from public.raster_status_viagem_documentos
+where numero is not null;
+
+notify pgrst, 'reload schema';
