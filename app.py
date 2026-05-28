@@ -740,26 +740,25 @@ def auto_cycle(rotinas: list[str], dias_viagens: int, dias_telemetria: int, limi
     return logs
 
 
-def controle_automatico(container=st.sidebar):
-    container.divider()
-    container.markdown("#### Execução automática")
-    if "auto_api_on" not in st.session_state:
-        st.session_state.auto_api_on = False
-    if "auto_last_run" not in st.session_state:
-        st.session_state.auto_last_run = None
-    if "auto_last_log" not in st.session_state:
-        st.session_state.auto_last_log = []
+def controle_automatico(container=st, key_prefix="auto"):
+    ui = container
 
-    c1, c2 = container.columns(2)
-    with c1:
-        if st.button("Iniciar", use_container_width=True):
-            st.session_state.auto_api_on = True
-            st.session_state.auto_last_run = None
-            st.rerun()
-    with c2:
-        if st.button("Parar", use_container_width=True):
-            st.session_state.auto_api_on = False
-            st.rerun()
+    col1, col2, col3 = ui.columns(3)
+
+    with col1:
+        if ui.button("Iniciar", use_container_width=True, key=f"{key_prefix}_btn_iniciar"):
+            st.session_state["auto_running"] = True
+            ui.success("Automação iniciada.")
+
+    with col2:
+        if ui.button("Parar", use_container_width=True, key=f"{key_prefix}_btn_parar"):
+            st.session_state["auto_running"] = False
+            ui.warning("Automação pausada.")
+
+    with col3:
+        if ui.button("Executar agora", use_container_width=True, key=f"{key_prefix}_btn_executar_agora"):
+            st.session_state["auto_force_run"] = True
+            ui.info("Execução manual iniciada.")
 
     intervalo_min = container.number_input("Intervalo", min_value=15, max_value=240, value=30, step=5, help="Intervalo em minutos entre cada ciclo automático. Mínimo 15 min para respeitar limites da Raster.")
     limite_auto = container.number_input("Limite placas auto", min_value=1, max_value=500, value=50, step=10)
