@@ -1,6 +1,8 @@
 import os
 import json
 import uuid
+import base64
+from pathlib import Path
 from datetime import date, datetime, timedelta, timezone
 
 import pandas as pd
@@ -21,6 +23,26 @@ select_rows = None
 test_connection = None
 
 load_dotenv()
+
+ASSETS_DIR = Path(__file__).parent / "assets"
+
+
+def asset_uri(filename: str) -> str:
+    """Retorna imagem local como data URI para usar em HTML seguro."""
+    try:
+        path = ASSETS_DIR / filename
+        data = path.read_bytes()
+        mime = "image/svg+xml" if filename.lower().endswith(".svg") else "image/png"
+        return f"data:{mime};base64," + base64.b64encode(data).decode("utf-8")
+    except Exception:
+        return ""
+
+
+def img_tag(filename: str, alt: str = "", cls: str = "module-img") -> str:
+    src = asset_uri(filename)
+    if not src:
+        return ""
+    return f"<img class='{cls}' src='{src}' alt='{alt}' />"
 
 
 def load_project_modules():
@@ -211,6 +233,61 @@ hr {margin: .8rem 0 !important;}
 st.markdown(CSS, unsafe_allow_html=True)
 
 
+st.markdown("""
+<style>
+/* ===== UX refinada: sistema corporativo tipo CRM/Fiori ===== */
+:root {
+  --cb-card-alpha: rgba(255,255,255,.78);
+  --cb-dark-card-alpha: rgba(18, 27, 36, .78);
+  --cb-accent: #0a6ed1;
+  --cb-accent-soft: rgba(10,110,209,.12);
+  --cb-border-soft: rgba(120,140,160,.30);
+}
+.block-container { padding-top: .25rem !important; }
+.sap-shell { animation: shellIn .35s ease-out; border-radius: 16px !important; margin-bottom: 10px !important; }
+@keyframes shellIn { from {opacity:0; transform: translateY(-6px);} to {opacity:1; transform: translateY(0);} }
+.kpi-card, .metric-tile, div[data-testid="stVerticalBlockBorderWrapper"] {
+  animation: cardIn .25s ease-out;
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+.kpi-card:hover, .metric-tile:hover { transform: translateY(-1px); border-color: rgba(10,110,209,.45) !important; }
+.module-img { width: 42px; height: 42px; object-fit: contain; display:block; }
+.brand-img { width: 46px; height: 46px; object-fit: contain; display:block; filter: drop-shadow(0 4px 10px rgba(0,0,0,.18)); }
+.nav-img { width: 22px; height: 22px; vertical-align: middle; margin-right: 6px; }
+.login-shell { min-height: 74vh; display: grid; place-items: center; }
+.login-card {
+  width: min(1080px, 100%); display:grid; grid-template-columns: 1.05fr .75fr; gap: 18px;
+  padding: 18px; border:1px solid var(--sap-border); border-radius:18px; background: var(--sap-card); box-shadow: 0 14px 40px rgba(20,35,50,.14);
+}
+.login-hero { padding: 30px; border-radius: 14px; background: linear-gradient(135deg, rgba(10,110,209,.12), rgba(16,126,62,.08)); border:1px solid rgba(10,110,209,.18); }
+.login-title { font-size: 30px; font-weight: 800; line-height: 1.05; color: var(--sap-text); margin-top: 12px; }
+.login-subtitle { font-size: 14px; color: var(--sap-muted); margin-top: 8px; max-width: 580px; }
+.login-form-wrap { padding: 26px; border-radius:14px; border:1px solid var(--sap-border); background: rgba(255,255,255,.5); }
+.sap-top-actions { display:flex; gap: 8px; align-items:center; justify-content:flex-end; margin-top:-6px; margin-bottom: 8px; }
+.automation-live {
+  border: 1px solid var(--sap-border); border-left: 4px solid var(--sap-good); border-radius: 12px; padding: 12px 14px;
+  background: var(--sap-card); box-shadow: var(--sap-shadow); margin-bottom: 12px;
+}
+.live-dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:#22c55e; margin-right:6px; animation:pulse 1.4s infinite; }
+@keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(34,197,94,.65);} 70%{box-shadow:0 0 0 8px rgba(34,197,94,0);} 100%{box-shadow:0 0 0 0 rgba(34,197,94,0);} }
+@keyframes cardIn { from {opacity:.0; transform:translateY(4px);} to {opacity:1; transform:translateY(0);} }
+.doc-card { border:1px solid var(--sap-border); border-radius:12px; background: var(--sap-card); padding: 16px; box-shadow: var(--sap-shadow); }
+.loading-card { border:1px solid var(--sap-border); border-radius:12px; padding:14px; background:var(--sap-card); }
+.loading-line { height:10px; border-radius:99px; background: linear-gradient(90deg, rgba(10,110,209,.12), rgba(10,110,209,.38), rgba(10,110,209,.12)); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
+@keyframes shimmer { to {background-position: -200% 0;} }
+/* imagens nos botões/cards sem deixar com cara de emoji */
+.sync-card-title { font-weight: 750; color: var(--sap-text); display:flex; align-items:center; gap:8px; }
+.sync-number { background: var(--cb-accent-soft); color: var(--cb-accent); border: 1px solid rgba(10,110,209,.22); border-radius: 7px; padding: 2px 7px; font-size: 12px; }
+@media (prefers-color-scheme: dark) {
+  .login-form-wrap { background: rgba(15, 23, 31, .55); }
+  .login-hero { background: linear-gradient(135deg, rgba(10,110,209,.18), rgba(16,126,62,.10)); }
+}
+@media (max-width: 900px) { .login-card { grid-template-columns: 1fr; } }
+</style>
+""", unsafe_allow_html=True)
+
+
+
 def require_login() -> bool:
     user_ok = get_config("DASHBOARD_USER", "Admin")
     pass_ok = get_config("DASHBOARD_PASSWORD", "inicio@01A")
@@ -219,41 +296,46 @@ def require_login() -> bool:
     if st.session_state.auth_ok:
         return True
 
+    logo = img_tag("cargoblue.svg", "Cargoblue", "brand-img")
+    raster = img_tag("raster.svg", "Raster", "module-img")
+    omni = img_tag("omnilink.svg", "Omnilink", "module-img")
+    doc = img_tag("docs.svg", "Documentação", "module-img")
+
     st.markdown(
-        """
-        <div class="sap-shell">
-          <div class="sap-shell-top">
-            <div class="sap-brand">
-              <div class="sap-logo">🚚</div>
-              <div>
-                <div class="sap-title">Central Operacional Cargoblue</div>
-                <div class="sap-subtitle">Acesso seguro • Raster • Omnilink/WSTT</div>
+        f"""
+        <div class="login-shell">
+          <div class="login-card">
+            <div class="login-hero">
+              {logo}
+              <div class="login-title">Central Operacional<br/>Raster + Omnilink/WSTT</div>
+              <div class="login-subtitle">Sistema corporativo para consultas, sincronizações, análise operacional, terminal das automações e documentação de uso.</div>
+              <div style="display:grid; grid-template-columns: repeat(3, minmax(120px,1fr)); gap:10px; margin-top:24px;">
+                <div class="doc-card">{raster}<b>Raster</b><br/><span class="small-muted">SM, checklist e viagens</span></div>
+                <div class="doc-card">{omni}<b>Omnilink/WSTT</b><br/><span class="small-muted">Telemetria e eventos</span></div>
+                <div class="doc-card">{doc}<b>Documentação</b><br/><span class="small-muted">Técnica e usuário</span></div>
               </div>
             </div>
-            <div class="sap-status"><span class="sap-pill good">Sistema online</span></div>
-          </div>
-        </div>
+            <div class="login-form-wrap">
+              <div style="font-size:22px;font-weight:800;color:var(--sap-text);margin-bottom:4px;">Entrar no sistema</div>
+              <div class="small-muted" style="margin-bottom:16px;">Acesso seguro ao cockpit operacional.</div>
         """,
         unsafe_allow_html=True,
     )
 
-    c1, c2, c3 = st.columns([1.2, 0.9, 1.2])
-    with c2:
-        with st.container(border=True):
-            st.subheader("Entrar no sistema")
-            st.caption("Informe suas credenciais para acessar as integrações.")
-            with st.form("login"):
-                usuario = st.text_input("Usuário")
-                senha = st.text_input("Senha", type="password")
-                entrar = st.form_submit_button("Entrar", use_container_width=True)
-            if entrar:
-                if usuario == user_ok and senha == pass_ok:
-                    st.session_state.auth_ok = True
-                    st.rerun()
-                else:
-                    st.error("Usuário ou senha inválidos.")
+    with st.form("login"):
+        usuario = st.text_input("Usuário", placeholder="Digite seu usuário")
+        senha = st.text_input("Senha", type="password", placeholder="Digite sua senha")
+        entrar = st.form_submit_button("Entrar", use_container_width=True)
+    if entrar:
+        if usuario == user_ok and senha == pass_ok:
+            st.session_state.auth_ok = True
+            st.session_state.terminal_logs = []
+            terminal_log("Login realizado com sucesso", "OK")
+            st.rerun()
+        else:
+            st.error("Usuário ou senha inválidos.")
+    st.markdown("</div></div></div>", unsafe_allow_html=True)
     return False
-
 
 def metric_card(label: str, value, help_text: str | None = None):
     st.markdown(
@@ -325,39 +407,57 @@ def checklist_status_summary(df: pd.DataFrame):
 
 
 def header():
+    logo = img_tag("cargoblue.svg", "Cargoblue", "brand-img")
+    automation_state = "Ligada" if st.session_state.get("auto_api_on") else "Desligada"
+    automation_cls = "good" if st.session_state.get("auto_api_on") else "warn"
     st.markdown(
-        """
+        f"""
         <div class="sap-shell">
           <div class="sap-shell-top">
             <div class="sap-brand">
-              <div class="sap-logo">🚚</div>
+              <div class="sap-logo">{logo}</div>
               <div>
                 <div class="sap-title">Central Operacional Cargoblue</div>
-                <div class="sap-subtitle">Raster • Omnilink/WSTT • Supabase • Consultas e automações</div>
+                <div class="sap-subtitle">Raster • Omnilink/WSTT • Consultas • Terminal • Documentação</div>
               </div>
             </div>
             <div class="sap-status">
-              <span class="sap-pill good">Online</span>
-              <span class="sap-pill">API Raster</span>
+              <span class="sap-pill good"><span class="live-dot"></span>Online</span>
+              <span class="sap-pill">Raster</span>
               <span class="sap-pill">Omnilink/WSTT</span>
-              <span class="sap-pill warn">Somente consulta</span>
+              <span class="sap-pill {automation_cls}">Automação: {automation_state}</span>
             </div>
           </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+    a1, a2, a3 = st.columns([0.66, 0.20, 0.14])
+    with a1:
+        st.caption("Cockpit operacional com monitoramento em tempo real das integrações")
+    with a2:
+        if st.session_state.get("auto_api_on"):
+            st.success("Automação em execução")
+        else:
+            st.info("Automação parada")
+    with a3:
+        if st.button("Sair", use_container_width=True, key="btn_logout_top"):
+            terminal_log("Logout executado", "INFO")
+            st.session_state.auth_ok = False
+            st.rerun()
 
 
 def top_navigation():
     pages = [
-        "📊 Visão geral",
-        "🛰️ Raster",
-        "🔎 Raster GET/Consultas",
-        "📡 Omnilink/WSTT",
-        "📈 Análises detalhadas",
-        "🖥️ Terminal",
-        "🗄️ Supabase / SQL",
+        "Visão geral",
+        "Raster",
+        "Raster GET/Consultas",
+        "Omnilink/WSTT",
+        "Análises detalhadas",
+        "Automações",
+        "Terminal",
+        "Documentação",
+        "Supabase / SQL",
     ]
     page = st.radio(
         "Navegação principal",
@@ -367,7 +467,6 @@ def top_navigation():
         key="top_nav_page",
     )
     return page
-
 
 def top_controls():
     with st.expander("⚙️ Filtros, execução automática e status da conexão", expanded=False):
@@ -696,16 +795,18 @@ def controle_automatico(container=st.sidebar):
         intervalo_seg = int(intervalo_min) * 60
         deve_rodar = ultimo is None or (agora - ultimo).total_seconds() >= intervalo_seg
         if deve_rodar and rotinas_auto:
-            with st.spinner("Executando ciclo automático das APIs..."):
+            with st.status("Executando ciclo automático das APIs...", expanded=True) as _auto_status:
                 try:
                     logs = auto_cycle(rotinas_auto, int(dias_viagens_auto), int(dias_tele_auto), int(limite_auto))
                     st.session_state.auto_last_log = logs
                     st.session_state.auto_last_run = agora
+                    _auto_status.update(label="Ciclo automático concluído", state="complete", expanded=False)
                     st.toast("Ciclo automático concluído", icon="✅")
                 except Exception as exc:
                     terminal_log(f"Erro no ciclo automático: {exc}", "ERRO")
                     st.session_state.auto_last_log = [f"Erro: {exc}"]
                     st.session_state.auto_last_run = agora
+                    _auto_status.update(label="Erro no ciclo automático", state="error", expanded=True)
                     st.toast("Erro no ciclo automático", icon="⚠️")
         if st.session_state.auto_last_run:
             container.caption("Última execução: " + st.session_state.auto_last_run.astimezone().strftime("%d/%m/%Y %H:%M:%S"))
@@ -780,6 +881,133 @@ def render_sync_panel(title: str, description: str):
     st.markdown(f"<div class='section-desc'>{description}</div>", unsafe_allow_html=True)
 
 
+def render_automation_monitor(compact: bool = False):
+    ativo = st.session_state.get("auto_api_on", False)
+    ultimo = st.session_state.get("auto_last_run")
+    logs = st.session_state.get("auto_last_log", [])
+    status_html = "<span class='live-dot'></span>Rodando" if ativo else "Parada"
+    st.markdown(
+        f"""
+        <div class="automation-live">
+          <b>Monitor da automação</b><br/>
+          Status: <b>{status_html}</b><br/>
+          Último ciclo: <b>{ultimo.astimezone().strftime('%d/%m/%Y %H:%M:%S') if ultimo else 'Ainda não executado'}</b>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if logs:
+        st.markdown("**Último ciclo executado**")
+        for item in logs[-8:]:
+            st.write("• " + str(item))
+    if not compact:
+        st.markdown("**Terminal operacional**")
+        render_terminal_block(height=360, include_db_logs=True)
+
+
+def generate_user_doc() -> str:
+    return f"""# Manual do Usuário — Central Operacional Cargoblue
+
+Atualizado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+
+## 1. Objetivo do sistema
+Este sistema centraliza consultas e sincronizações das integrações Raster e Omnilink/WSTT para acompanhamento operacional.
+
+## 2. Como acessar
+1. Abra o link do Streamlit.
+2. Informe usuário e senha.
+3. Use o botão **Sair** no topo para voltar à tela de login.
+
+## 3. Menu principal
+- **Visão geral**: resumo executivo das bases.
+- **Raster**: SM, status viagem, checklist, tabelas de apoio e logs.
+- **Raster GET/Consultas**: consultas diretas do manual da Raster, sem método de inclusão.
+- **Omnilink/WSTT**: frota, viagens, telemetria e eventos.
+- **Automações**: controle de execução automática e terminal do ciclo.
+- **Terminal**: histórico do que foi executado.
+
+## 4. Execução automática
+A execução automática roda as rotinas selecionadas respeitando intervalo mínimo. O terminal mostra início, fim, quantidade de registros e erros tratados.
+
+## 5. Checklist Raster
+O sistema trabalha somente com consulta de checklists existentes. Ele não cria checklist e não chama setIncluirCheckList.
+
+## 6. Download de dados
+Nas tabelas, use **Baixar CSV** para exportar os dados exibidos.
+"""
+
+
+def generate_technical_doc() -> str:
+    return f"""# Documentação Técnica — Central Raster + Omnilink/WSTT
+
+Atualizado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+
+## 1. Arquitetura
+- Frontend/App: Streamlit
+- Integração Raster: api_raster.py e api_raster_live.py
+- Integração Omnilink/WSTT: api_omnilink.py
+- Banco operacional: Supabase
+- Configuração sensível: Streamlit Secrets
+
+## 2. Secrets esperados
+- DASHBOARD_USER
+- DASHBOARD_PASSWORD
+- SUPABASE_URL
+- SUPABASE_SERVICE_KEY
+- RASTER_BASE_URL
+- RASTER_LOGIN
+- RASTER_SENHA
+- RASTER_AMBIENTE
+- RASTER_TIPO_RETORNO
+- RASTER_COD_FILIAL
+- RASTER_COD_PERFIL_SEGURANCA
+- RASTER_PRODUTOS
+- WSTT_USUARIO
+- WSTT_SENHA
+
+## 3. Rotinas Raster
+- getTabela
+- getEventoFimViagem
+- getStatusViagem
+- getHistoricoTestes
+- getGerarResultadoCheckList
+- getKMRodado
+- getPosicoes
+
+## 4. Rotinas Omnilink/WSTT
+- Frota
+- Viagens
+- Telemetria
+- Eventos tracker
+
+## 5. Segurança operacional
+- O sistema não deve chamar setIncluirCheckList.
+- O sistema não deve criar checklist automaticamente.
+- Erros técnicos ficam no terminal/log, não nas tabelas operacionais principais.
+
+## 6. Terminal
+A tabela integracao_execucoes grava origem, rotina, status, quantidade, erro e data/hora de execução.
+"""
+
+
+def render_documentation_page():
+    render_sync_panel("Central de documentação", "Gere documentação técnica e manual do usuário diretamente pelo sistema.")
+    doc_user = generate_user_doc()
+    doc_tech = generate_technical_doc()
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("<div class='doc-card'>" + img_tag("docs.svg", "Manual", "module-img") + "<h3>Manual do usuário</h3><p class='small-muted'>Explica como acessar, navegar, usar filtros, automações e exportações.</p></div>", unsafe_allow_html=True)
+        st.download_button("Baixar manual do usuário", doc_user.encode("utf-8"), file_name="manual_usuario_central_cargoblue.md", mime="text/markdown", use_container_width=True, key="download_user_doc")
+        with st.expander("Visualizar manual do usuário", expanded=False):
+            st.markdown(doc_user)
+    with c2:
+        st.markdown("<div class='doc-card'>" + img_tag("terminal.svg", "Técnico", "module-img") + "<h3>Documentação técnica</h3><p class='small-muted'>Arquitetura, secrets, rotinas e regras de segurança operacional.</p></div>", unsafe_allow_html=True)
+        st.download_button("Baixar documentação técnica", doc_tech.encode("utf-8"), file_name="documentacao_tecnica_central_cargoblue.md", mime="text/markdown", use_container_width=True, key="download_tech_doc")
+        with st.expander("Visualizar documentação técnica", expanded=False):
+            st.markdown(doc_tech)
+
+
+
 if not require_login():
     st.stop()
 
@@ -795,7 +1023,7 @@ header()
 page = top_navigation()
 plate_filter, global_search = top_controls()
 
-page_key = page.split(" ", 1)[1]
+page_key = page
 
 if page_key == "Visão geral":
     r = api_raster.get_kpis()
@@ -804,15 +1032,16 @@ if page_key == "Visão geral":
     wstt_resumo = wstt_df_para_dashboard(get_wstt_resumo_df())
 
     render_sync_panel("Painel executivo", "Resumo consolidado das integrações, saúde da base e indicadores principais para operação.")
-    cards = st.columns(8)
+    cards = st.columns(4)
     with cards[0]: metric_card("SM Raster", r.get("sm_abertas", 0), "Pré-SM / SM abertas")
     with cards[1]: metric_card("Placas Raster", r.get("placas", 0), "Veículos identificados")
     with cards[2]: metric_card("Aptos", r.get("aptos", 0), "StatusChecklist = S")
     with cards[3]: metric_card("Não aptos", r.get("nao_aptos", 0), "StatusChecklist = N")
-    with cards[4]: metric_card("Fora prazo", r.get("fora_prazo", 0), "Indicador Raster")
-    with cards[5]: metric_card("Veículos WSTT", o.get("veiculos", 0), "Frota carregada")
-    with cards[6]: metric_card("Viagens WSTT", o.get("viagens", 0), "Histórico sincronizado")
-    with cards[7]: metric_card("Eventos WSTT", o.get("eventos", 0), "Tracker/telemetria")
+    cards2 = st.columns(4)
+    with cards2[0]: metric_card("Fora prazo", r.get("fora_prazo", 0), "Indicador Raster")
+    with cards2[1]: metric_card("Veículos WSTT", o.get("veiculos", 0), "Frota carregada")
+    with cards2[2]: metric_card("Viagens WSTT", o.get("viagens", 0), "Histórico sincronizado")
+    with cards2[3]: metric_card("Eventos WSTT", o.get("eventos", 0), "Tracker/telemetria")
 
     left, right = st.columns([1.1, 0.9])
     with left:
@@ -1551,6 +1780,17 @@ elif page_key == "Análises detalhadas":
             fig.update_layout(margin=dict(l=10, r=10, t=20, b=10), height=380, xaxis_title="KM total", yaxis_title="Eventos tracker")
             st.plotly_chart(fig, use_container_width=True)
 
+elif page_key == "Automações":
+    render_sync_panel("Automações e terminal vivo", "Controle o ciclo automático, veja o que está rodando e acompanhe logs reais das integrações.")
+    c1, c2 = st.columns([0.42, 0.58])
+    with c1:
+        with st.container(border=True):
+            controle_automatico(container=st)
+    with c2:
+        render_automation_monitor(compact=False)
+    st.markdown("### Últimas execuções gravadas")
+    show_dataframe(df_table("integracao_execucoes", "origem,rotina,status,qtd_registros,executado_em", 300, "executado_em"), height=420, search_text=global_search)
+
 elif page_key == "Terminal":
     render_sync_panel("Terminal das integrações", "Acompanhe em tempo real o que o dashboard executou e os últimos logs gravados no Supabase.")
     c1, c2, c3 = st.columns([0.2, 0.2, 0.6])
@@ -1573,6 +1813,9 @@ elif page_key == "Terminal":
         if not diag.empty:
             diag = diag[(diag.get("origem") == "Raster") & (diag.get("status") == "erro")] if "origem" in diag.columns and "status" in diag.columns else diag
         show_dataframe(diag, height=360, search_text=global_search)
+
+elif page_key == "Documentação":
+    render_documentation_page()
 
 elif page_key == "Supabase / SQL":
     render_sync_panel("Estrutura Supabase", "Consulta de referência da estrutura. Se suas tabelas já existem no Supabase, não precisa recriar; o app usa as tabelas existentes e faz upsert nos dados.")
