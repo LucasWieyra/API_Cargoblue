@@ -945,7 +945,7 @@ elif page_key == "Raster GET/Consultas":
                 csv,
                 file_name=f"{title.replace(' ', '_').replace('/', '_')}.csv",
                 mime="text/csv",
-                key=f"raster_live_csv_{title}",
+                key=f"raster_live_csv_{uuid.uuid4().hex}",
                 use_container_width=True,
             )
         with st.expander("Ver JSON bruto / diagnóstico"):
@@ -1150,7 +1150,7 @@ elif page_key == "Raster GET/Consultas":
     with tabs_live[5]:
         st.header("📦 Resultados em memória")
         if st.session_state.raster_live_results:
-            st.download_button("Baixar ZIP com JSON/CSV", live_build_zip(st.session_state.raster_live_results), file_name="raster_get_consultas_resultados.zip", mime="application/zip", use_container_width=True)
+            st.download_button("Baixar ZIP com JSON/CSV", live_build_zip(st.session_state.raster_live_results), file_name="raster_get_consultas_resultados.zip", mime="application/zip", use_container_width=True, key=f"raster_live_zip_{uuid.uuid4().hex}")
             selected = st.selectbox("Resultado", list(st.session_state.raster_live_results.keys()), key="live_result_selected")
             live_show_response(selected, st.session_state.raster_live_results[selected])
         else:
