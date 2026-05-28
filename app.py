@@ -495,40 +495,39 @@ def require_login() -> bool:
     col_left, col_right = st.columns([1.25, 0.9], gap="large")
 
     with col_left:
-        st.markdown(
-            f"""
-            <div class="login-hero-fixed">
-                {logo}
-                <div class="login-title-fixed">
-                    Central Operacional<br/>Raster + Omnilink/WSTT
-                </div>
-                <div class="login-subtitle-fixed">
-                    Sistema corporativo para consultas, sincronizações, análise operacional,
-                    terminal das automações e documentação de uso.
-                </div>
+    st.markdown(
+        textwrap.dedent(f"""
+        <div class="login-hero-fixed">
+            {logo}
+            <div class="login-title-fixed">
+                Central Operacional<br/>Raster + Omnilink/WSTT
+            </div>
+            <div class="login-subtitle-fixed">
+                Sistema corporativo para consultas, sincronizações, análise operacional,
+                terminal das automações e documentação de uso.
+            </div>
 
-                <div class="login-feature-grid">
-                    <div class="login-feature-card">
-                        {raster}
-                        <div class="login-feature-title">Raster</div>
-                        <div class="login-feature-desc">SM, checklist e viagens</div>
-                    </div>
-                    <div class="login-feature-card">
-                        {omni}
-                        <div class="login-feature-title">Omnilink/WSTT</div>
-                        <div class="login-feature-desc">Telemetria e eventos</div>
-                    </div>
-                    <div class="login-feature-card">
-                        {doc}
-                        <div class="login-feature-title">Documentação</div>
-                        <div class="login-feature-desc">Técnica e usuário</div>
-                    </div>
+            <div class="login-feature-grid">
+                <div class="login-feature-card">
+                    {raster}
+                    <div class="login-feature-title">Raster</div>
+                    <div class="login-feature-desc">SM, checklist e viagens</div>
+                </div>
+                <div class="login-feature-card">
+                    {omni}
+                    <div class="login-feature-title">Omnilink/WSTT</div>
+                    <div class="login-feature-desc">Telemetria e eventos</div>
+                </div>
+                <div class="login-feature-card">
+                    {doc}
+                    <div class="login-feature-title">Documentação</div>
+                    <div class="login-feature-desc">Técnica e usuário</div>
                 </div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
+        </div>
+        """),
+        unsafe_allow_html=True,
+    )
     with col_right:
         with st.form("login_form", clear_on_submit=False):
             st.markdown(
