@@ -291,8 +291,10 @@ st.markdown("""
 def require_login() -> bool:
     user_ok = get_config("DASHBOARD_USER", "Admin")
     pass_ok = get_config("DASHBOARD_PASSWORD", "inicio@01A")
+
     if "auth_ok" not in st.session_state:
         st.session_state.auth_ok = False
+
     if st.session_state.auth_ok:
         return True
 
@@ -302,30 +304,274 @@ def require_login() -> bool:
     doc = img_tag("docs.svg", "Documentação", "module-img")
 
     st.markdown(
-        f"""
-        <div class="login-shell">
-          <div class="login-card">
-            <div class="login-hero">
-              {logo}
-              <div class="login-title">Central Operacional<br/>Raster + Omnilink/WSTT</div>
-              <div class="login-subtitle">Sistema corporativo para consultas, sincronizações, análise operacional, terminal das automações e documentação de uso.</div>
-              <div style="display:grid; grid-template-columns: repeat(3, minmax(120px,1fr)); gap:10px; margin-top:24px;">
-                <div class="doc-card">{raster}<b>Raster</b><br/><span class="small-muted">SM, checklist e viagens</span></div>
-                <div class="doc-card">{omni}<b>Omnilink/WSTT</b><br/><span class="small-muted">Telemetria e eventos</span></div>
-                <div class="doc-card">{doc}<b>Documentação</b><br/><span class="small-muted">Técnica e usuário</span></div>
-              </div>
-            </div>
-            <div class="login-form-wrap">
-              <div style="font-size:22px;font-weight:800;color:var(--sap-text);margin-bottom:4px;">Entrar no sistema</div>
-              <div class="small-muted" style="margin-bottom:16px;">Acesso seguro ao cockpit operacional.</div>
+        """
+        <style>
+            .block-container {
+                padding-top: 2.2rem !important;
+                max-width: 1280px !important;
+            }
+
+            [data-testid="stSidebar"] {
+                display: none;
+            }
+
+            [data-testid="stHeader"] {
+                background: transparent;
+            }
+
+            .login-top-shell {
+                width: 100%;
+                margin: 0 auto;
+                padding: 18px;
+                border-radius: 24px;
+                background: rgba(255, 255, 255, 0.92);
+                border: 1px solid rgba(203, 213, 225, 0.9);
+                box-shadow: 0 24px 70px rgba(15, 23, 42, 0.10);
+            }
+
+            .login-hero-fixed {
+                min-height: 430px;
+                border-radius: 20px;
+                padding: 42px 38px;
+                background:
+                    radial-gradient(circle at top left, rgba(10, 110, 209, 0.13), transparent 34%),
+                    linear-gradient(135deg, #eef7ff 0%, #f8fbff 55%, #effdf6 100%);
+                border: 1px solid #cfe3f3;
+                overflow: hidden;
+            }
+
+            .login-title-fixed {
+                font-size: 34px;
+                line-height: 1.12;
+                font-weight: 850;
+                color: #172b43;
+                margin: 22px 0 14px 0;
+                letter-spacing: -0.8px;
+            }
+
+            .login-subtitle-fixed {
+                color: #65758b;
+                font-size: 15px;
+                line-height: 1.7;
+                max-width: 560px;
+                margin-bottom: 26px;
+            }
+
+            .login-feature-grid {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(120px, 1fr));
+                gap: 12px;
+                margin-top: 26px;
+            }
+
+            .login-feature-card {
+                background: rgba(255, 255, 255, 0.88);
+                border: 1px solid #dbe7f2;
+                border-radius: 17px;
+                padding: 18px;
+                min-height: 128px;
+                box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+                transition: transform .18s ease, box-shadow .18s ease;
+            }
+
+            .login-feature-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
+            }
+
+            .login-feature-title {
+                font-weight: 800;
+                font-size: 15px;
+                color: #24364b;
+                margin-top: 8px;
+            }
+
+            .login-feature-desc {
+                color: #6b7c90;
+                font-size: 14px;
+                margin-top: 4px;
+            }
+
+            .login-panel-head {
+                margin-bottom: 18px;
+            }
+
+            .login-panel-title {
+                font-size: 25px;
+                font-weight: 850;
+                color: #1f2d3d;
+                margin-bottom: 8px;
+                letter-spacing: -0.3px;
+            }
+
+            .login-panel-subtitle {
+                color: #6b7c90;
+                font-size: 15px;
+                line-height: 1.6;
+            }
+
+            div[data-testid="stForm"] {
+                min-height: 430px;
+                border: 1px solid #d8e1ea !important;
+                border-radius: 20px !important;
+                padding: 36px 32px 30px 32px !important;
+                background: rgba(255, 255, 255, 0.96) !important;
+                box-shadow: 0 14px 38px rgba(15, 23, 42, 0.08) !important;
+            }
+
+            div[data-testid="stTextInput"] label {
+                font-weight: 700;
+                color: #24364b;
+                font-size: 14px;
+            }
+
+            div[data-testid="stTextInput"] input {
+                border-radius: 13px;
+                background: #f6f8fb;
+                border: 1px solid #dce5ef;
+                min-height: 46px;
+                color: #172b43;
+            }
+
+            div[data-testid="stTextInput"] input:focus {
+                border-color: #0a6ed1;
+                box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.12);
+            }
+
+            div[data-testid="stFormSubmitButton"] button {
+                height: 47px;
+                border-radius: 13px;
+                background: #0a6ed1;
+                color: white;
+                border: 1px solid #0a6ed1;
+                font-weight: 800;
+                transition: all .18s ease;
+                margin-top: 10px;
+            }
+
+            div[data-testid="stFormSubmitButton"] button:hover {
+                background: #0854a0;
+                border-color: #0854a0;
+                color: white;
+                transform: translateY(-1px);
+                box-shadow: 0 10px 22px rgba(10, 110, 209, 0.24);
+            }
+
+            .login-security-note {
+                margin-top: 18px;
+                padding: 12px 14px;
+                border-radius: 14px;
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                color: #64748b;
+                font-size: 13px;
+                line-height: 1.5;
+            }
+
+            @media (max-width: 900px) {
+                .login-feature-grid {
+                    grid-template-columns: 1fr;
+                }
+
+                .login-title-fixed {
+                    font-size: 28px;
+                }
+
+                .login-hero-fixed {
+                    min-height: auto;
+                }
+
+                div[data-testid="stForm"] {
+                    min-height: auto;
+                }
+            }
+        </style>
         """,
         unsafe_allow_html=True,
     )
 
-    with st.form("login"):
-        usuario = st.text_input("Usuário", placeholder="Digite seu usuário")
-        senha = st.text_input("Senha", type="password", placeholder="Digite sua senha")
-        entrar = st.form_submit_button("Entrar", use_container_width=True)
+    st.markdown('<div class="login-top-shell">', unsafe_allow_html=True)
+
+    col_left, col_right = st.columns([1.25, 0.9], gap="large")
+
+    with col_left:
+        st.markdown(
+            f"""
+            <div class="login-hero-fixed">
+                {logo}
+                <div class="login-title-fixed">
+                    Central Operacional<br/>Raster + Omnilink/WSTT
+                </div>
+                <div class="login-subtitle-fixed">
+                    Sistema corporativo para consultas, sincronizações, análise operacional,
+                    terminal das automações e documentação de uso.
+                </div>
+
+                <div class="login-feature-grid">
+                    <div class="login-feature-card">
+                        {raster}
+                        <div class="login-feature-title">Raster</div>
+                        <div class="login-feature-desc">SM, checklist e viagens</div>
+                    </div>
+                    <div class="login-feature-card">
+                        {omni}
+                        <div class="login-feature-title">Omnilink/WSTT</div>
+                        <div class="login-feature-desc">Telemetria e eventos</div>
+                    </div>
+                    <div class="login-feature-card">
+                        {doc}
+                        <div class="login-feature-title">Documentação</div>
+                        <div class="login-feature-desc">Técnica e usuário</div>
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with col_right:
+        with st.form("login_form", clear_on_submit=False):
+            st.markdown(
+                """
+                <div class="login-panel-head">
+                    <div class="login-panel-title">Entrar no sistema</div>
+                    <div class="login-panel-subtitle">
+                        Acesso seguro ao cockpit operacional.
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            usuario = st.text_input(
+                "Usuário",
+                placeholder="Digite seu usuário",
+                key="login_usuario",
+            )
+
+            senha = st.text_input(
+                "Senha",
+                type="password",
+                placeholder="Digite sua senha",
+                key="login_senha",
+            )
+
+            entrar = st.form_submit_button(
+                "Entrar",
+                use_container_width=True,
+            )
+
+            st.markdown(
+                """
+                <div class="login-security-note">
+                    Ambiente restrito para operação, consulta de APIs, automações e análises internas.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
     if entrar:
         if usuario == user_ok and senha == pass_ok:
             st.session_state.auth_ok = True
@@ -334,7 +580,7 @@ def require_login() -> bool:
             st.rerun()
         else:
             st.error("Usuário ou senha inválidos.")
-    st.markdown("</div></div></div>", unsafe_allow_html=True)
+
     return False
 
 def metric_card(label: str, value, help_text: str | None = None):
