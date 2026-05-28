@@ -945,79 +945,171 @@ def auto_cycle(rotinas: list[str], dias_viagens: int, dias_telemetria: int, limi
 def controle_automatico(container=st, key_prefix="auto"):
     ui = container
 
+    if "auto_api_on" not in st.session_state:
+        st.session_state.auto_api_on = False
+
+    if "auto_running" not in st.session_state:
+        st.session_state.auto_running = False
+
+    if "auto_last_run" not in st.session_state:
+        st.session_state.auto_last_run = None
+
+    if "auto_last_log" not in st.session_state:
+        st.session_state.auto_last_log = []
+
+    if "auto_force_run" not in st.session_state:
+        st.session_state.auto_force_run = False
+
     col1, col2, col3 = ui.columns(3)
 
     with col1:
         if ui.button("Iniciar", use_container_width=True, key=f"{key_prefix}_btn_iniciar"):
-            st.session_state["auto_running"] = True
+            st.session_state.auto_api_on = True
+            st.session_state.auto_running = True
             ui.success("Automação iniciada.")
 
     with col2:
         if ui.button("Parar", use_container_width=True, key=f"{key_prefix}_btn_parar"):
-            st.session_state["auto_running"] = False
+            st.session_state.auto_api_on = False
+            st.session_state.auto_running = False
             ui.warning("Automação pausada.")
 
     with col3:
         if ui.button("Executar agora", use_container_width=True, key=f"{key_prefix}_btn_executar_agora"):
-            st.session_state["auto_force_run"] = True
+            st.session_state.auto_force_run = True
             ui.info("Execução manual iniciada.")
 
-    intervalo_min = container.number_input("Intervalo", min_value=15, max_value=240, value=30, step=5, help="Intervalo em minutos entre cada ciclo automático. Mínimo 15 min para respeitar limites da Raster.", key=f"{key_prefix}_intervalo")
-    limite_auto = container.number_input("Limite placas auto", min_value=1, max_value=500, value=50, step=10, key=f"{key_prefix}_limite_placas")
-    dias_viagens_auto = container.number_input("Dias viagens", min_value=1, max_value=30, value=7, step=1, key=f"{key_prefix}_dias_viagens")
-    dias_tele_auto = container.number_input("Dias telemetria/eventos", min_value=1, max_value=3, value=1, step=1, key=f"{key_prefix}_dias_telemetria")
-    rotinas_auto = container.multiselect(
+    intervalo_min = ui.number_input(
+        "Intervalo",
+        min_value=15,
+        max_value=240,
+        value=30,
+        step=5,
+        help="Intervalo em minutos entre cada ciclo automático. Mínimo 15 min para respeitar limites da Raster.",
+        key=f"{key_prefix}_intervalo_min",
+    )
+
+    limite_auto = ui.number_input(
+        "Limite placas auto",
+        min_value=1,
+        max_value=500,
+        value=50,
+        step=10,
+        key=f"{key_prefix}_limite_auto",
+    )
+
+    dias_viagens_auto = ui.number_input(
+        "Dias viagens",
+        min_value=1,
+        max_value=30,
+        value=7,
+        step=1,
+        key=f"{key_prefix}_dias_viagens",
+    )
+
+    dias_tele_auto = ui.number_input(
+        "Dias telemetria/eventos",
+        min_value=1,
+        max_value=3,
+        value=1,
+        step=1,
+        key=f"{key_prefix}_dias_tele",
+    )
+
+    rotinas_auto = ui.multiselect(
         "Rotinas",
         [
             "Raster SM",
             "Raster viagens",
             "Raster status viagem",
             "Raster checklist existente válido",
-            
             "WSTT frota",
             "WSTT viagens",
             "WSTT telemetria",
             "WSTT eventos",
         ],
-        default=["Raster SM", "Raster status viagem", "Raster checklist existente válido", "WSTT frota", "WSTT viagens", "WSTT telemetria", "WSTT eventos"],
-        key=f"{key_prefix}_rotinas",
+        default=[
+            "Raster SM",
+            "Raster status viagem",
+            "Raster checklist existente válido",
+            "WSTT frota",
+            "WSTT viagens",
+            "WSTT telemetria",
+            "WSTT eventos",
+        ],
+        key=f"{key_prefix}_rotinas_auto",
     )
 
-    container.caption("Automático inclui StatusViagem e checklist somente consulta. Não cria checklist e usa período automático mês anterior + mês atual para eventos Raster.")
+    ui.caption(
+        "Automático inclui StatusViagem e checklist somente consulta. "
+        "Não cria checklist e usa período automático mês anterior + mês atual para eventos Raster."
+    )
 
     if st.session_state.auto_api_on:
-        container.success("Automático ligado")
+        ui.success("Automático ligado")
+
         if st_autorefresh is not None:
-            st_autorefresh(interval=60 * 1000, key=f"{key_prefix}_auto_refresh_tick")
+            st_autorefresh(
+                interval=60 * 1000,
+                key=f"{key_prefix}_auto_refresh_tick",
+            )
         else:
-            container.warning("Instale streamlit-autorefresh para atualização automática mais suave.")
+            ui.warning("Instale streamlit-autorefresh para atualização automática mais suave.")
 
         agora = datetime.now(timezone.utc)
         ultimo = st.session_state.auto_last_run
         intervalo_seg = int(intervalo_min) * 60
-        deve_rodar = ultimo is None or (agora - ultimo).total_seconds() >= intervalo_seg
+
+        deve_rodar = (
+            st.session_state.auto_force_run
+            or ultimo is None
+            or (agora - ultimo).total_seconds() >= intervalo_seg
+        )
+
         if deve_rodar and rotinas_auto:
+            st.session_state.auto_force_run = False
+
             with st.status("Executando ciclo automático das APIs...", expanded=True) as _auto_status:
                 try:
-                    logs = auto_cycle(rotinas_auto, int(dias_viagens_auto), int(dias_tele_auto), int(limite_auto))
+                    logs = auto_cycle(
+                        rotinas_auto,
+                        int(dias_viagens_auto),
+                        int(dias_tele_auto),
+                        int(limite_auto),
+                    )
                     st.session_state.auto_last_log = logs
                     st.session_state.auto_last_run = agora
-                    _auto_status.update(label="Ciclo automático concluído", state="complete", expanded=False)
+                    _auto_status.update(
+                        label="Ciclo automático concluído",
+                        state="complete",
+                        expanded=False,
+                    )
                     st.toast("Ciclo automático concluído", icon="✅")
+
                 except Exception as exc:
                     terminal_log(f"Erro no ciclo automático: {exc}", "ERRO")
                     st.session_state.auto_last_log = [f"Erro: {exc}"]
                     st.session_state.auto_last_run = agora
-                    _auto_status.update(label="Erro no ciclo automático", state="error", expanded=True)
+                    _auto_status.update(
+                        label="Erro no ciclo automático",
+                        state="error",
+                        expanded=True,
+                    )
                     st.toast("Erro no ciclo automático", icon="⚠️")
+
         if st.session_state.auto_last_run:
-            container.caption("Última execução: " + st.session_state.auto_last_run.astimezone().strftime("%d/%m/%Y %H:%M:%S"))
+            ui.caption(
+                "Última execução: "
+                + st.session_state.auto_last_run.astimezone().strftime("%d/%m/%Y %H:%M:%S")
+            )
+
         if st.session_state.auto_last_log:
-            with container.expander("Último ciclo"):
+            with ui.expander("Último ciclo"):
                 for item in st.session_state.auto_last_log:
                     st.write(item)
+
     else:
-        container.info("Automático desligado")
+        ui.info("Automático desligado")
 
 
 def fallback_raster_status() -> pd.DataFrame:
