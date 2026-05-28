@@ -54,7 +54,8 @@ try:
         os.environ.setdefault(str(_k), str(_v))
 except Exception:
     pass
-
+    
+st.success("✅ App carregado no Streamlit Cloud")
 st.set_page_config(
     page_title="Central Raster + Omnilink",
     page_icon="🚚",
@@ -75,7 +76,7 @@ CSS = """
 .info-box, .warn-box, .auto-box { border: 1px solid rgba(128,128,128,.25); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
 </style>
 """
-st.markdown(CSS, unsafe_allow_html=True)
+#st.markdown(CSS, unsafe_allow_html=True)
 st.caption("✅ App carregado no Streamlit Cloud")
 
 
