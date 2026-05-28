@@ -47,23 +47,23 @@ st.set_page_config(
 CSS = """
 <style>
 html, body, [data-testid="stAppViewContainer"], .stApp {
-    background: #020617 !important;
-    color: #F8FAFC !important;
+    background: transparent !important;
+    color: inherit !important;
 }
 [data-testid="stHeader"] {
-    background: rgba(2, 6, 23, 0.82) !important;
+    background: transparent !important;
 }
 [data-testid="stToolbar"] {
-    color: #F8FAFC !important;
+    color: inherit !important;
 }
 :root {
-    --bg: #020617;
-    --bg-2: #081224;
-    --card: rgba(15, 23, 42, 0.88);
-    --stroke: rgba(148, 163, 184, 0.18);
-    --muted: #94A3B8;
-    --text: #F8FAFC;
-    --primary: #38BDF8;
+    --bg: transparent;
+    --bg-2: var(--secondary-background-color);
+    --card: color-mix(in srgb, var(--secondary-background-color) 74%, transparent);
+    --stroke: color-mix(in srgb, var(--text-color) 16%, transparent);
+    --muted: color-mix(in srgb, var(--text-color) 62%, transparent);
+    --text: var(--text-color);
+    --primary: var(--primary-color);
     --ok: #22C55E;
     --warn: #F59E0B;
     --bad: #EF4444;
@@ -74,10 +74,8 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
     padding-bottom: 2rem;
 }
 [data-testid="stSidebar"] {
-    background:
-        radial-gradient(circle at top, rgba(56,189,248,.12), transparent 24%),
-        linear-gradient(180deg, #030712, #0F172A);
-    border-right: 1px solid rgba(148,163,184,.12);
+    background: transparent !important;
+    border-right: 1px solid var(--stroke);
 }
 [data-testid="stSidebar"] .stRadio > div {
     gap: .35rem;
@@ -86,15 +84,15 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
     border: 1px solid rgba(148,163,184,.12);
     border-radius: 14px;
     padding: .25rem .65rem;
-    background: rgba(15,23,42,.45);
+    background: color-mix(in srgb, var(--secondary-background-color) 55%, transparent);
 }
 .hero {
     position: relative;
     overflow: hidden;
     background:
-        radial-gradient(circle at 8% 12%, rgba(34,197,94,.11), transparent 22%),
-        radial-gradient(circle at 90% 18%, rgba(56,189,248,.20), transparent 22%),
-        linear-gradient(135deg, #0F172A 0%, #020617 100%);
+        radial-gradient(circle at 8% 12%, rgba(34,197,94,.10), transparent 22%),
+        radial-gradient(circle at 90% 18%, rgba(56,189,248,.12), transparent 22%),
+        color-mix(in srgb, var(--secondary-background-color) 72%, transparent);
     border: 1px solid rgba(148,163,184,.20);
     border-radius: 28px;
     padding: 24px 26px 22px 26px;
@@ -123,7 +121,7 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
 .section-title {font-size: 24px; font-weight: 800; margin: 4px 0 12px 0; letter-spacing: -.03em;}
 .section-desc {font-size: 13px; color: var(--muted); margin-top: -4px; margin-bottom: 12px;}
 .kpi-card {
-    background: linear-gradient(180deg, rgba(15,23,42,.95), rgba(2,6,23,.92));
+    background: var(--card);
     border: 1px solid rgba(148,163,184,.18);
     border-radius: 22px;
     padding: 18px 18px 16px 18px;
@@ -140,8 +138,8 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
     padding: 7px 12px;
     border-radius: 999px;
     border: 1px solid rgba(148,163,184,.25);
-    background: rgba(15,23,42,.76);
-    color: #CBD5E1;
+    background: color-mix(in srgb, var(--secondary-background-color) 60%, transparent);
+    color: var(--muted);
     font-size: 12px;
     margin-right: 7px;
     margin-top: 12px;
@@ -150,7 +148,7 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
 .badge.warn { border-color: rgba(245,158,11,.35); color: #FDE68A; background: rgba(245,158,11,.10); }
 .badge.info { border-color: rgba(56,189,248,.35); color: #BAE6FD; background: rgba(56,189,248,.10); }
 .panel {
-    background: linear-gradient(180deg, rgba(15,23,42,.90), rgba(2,6,23,.92));
+    background: var(--card);
     border: 1px solid rgba(148,163,184,.16);
     border-radius: 24px;
     padding: 18px;
@@ -205,7 +203,7 @@ div[data-baseweb="tab-list"] {
     gap: 6px;
 }
 div[data-baseweb="tab"] {
-    background: rgba(15,23,42,.45);
+    background: color-mix(in srgb, var(--secondary-background-color) 55%, transparent);
     border-radius: 12px 12px 0 0;
     border: 1px solid rgba(148,163,184,.10);
     padding-top: 8px;
@@ -213,7 +211,7 @@ div[data-baseweb="tab"] {
 }
 
 .sync-card {
-    background: linear-gradient(180deg, rgba(15,23,42,.92), rgba(2,6,23,.88));
+    background: var(--card);
     border: 1px solid rgba(148,163,184,.16);
     border-radius: 22px;
     padding: 18px;
@@ -223,7 +221,7 @@ div[data-baseweb="tab"] {
 .sync-card-title {
     font-size: 18px;
     font-weight: 850;
-    color: #F8FAFC;
+    color: var(--text);
     margin-bottom: 4px;
 }
 .sync-card-desc {
@@ -241,7 +239,7 @@ div[data-baseweb="tab"] {
     border-radius: 999px;
     background: rgba(56,189,248,.14);
     border: 1px solid rgba(56,189,248,.28);
-    color:#BAE6FD;
+    color: var(--primary);
     font-size: 12px;
     font-weight: 800;
     margin-right: 8px;
@@ -257,7 +255,7 @@ div[data-baseweb="tab"] {
 
 
 .terminal-box {
-    background: #020617;
+    background: color-mix(in srgb, var(--secondary-background-color) 60%, transparent);
     border: 1px solid rgba(34,197,94,.22);
     border-radius: 18px;
     padding: 14px;
@@ -270,7 +268,10 @@ div[data-baseweb="tab"] {
 }
 .terminal-line-muted { color: #94A3B8; }
 
-html, body, [data-testid="stAppViewContainer"] { background: #FFFFFF !important; color: #0F172A !important; }
+
+@supports not (background: color-mix(in srgb, white 50%, transparent)) {
+  :root { --card: rgba(128,128,128,.10); --stroke: rgba(128,128,128,.22); --muted: #94A3B8; }
+}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)

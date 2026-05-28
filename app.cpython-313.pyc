@@ -1,0 +1,6 @@
+[server]
+headless = true
+
+[theme]
+# Sem background fixo: o usuário pode alternar Dark/Light pelo Streamlit.
+font = "sans serif"
