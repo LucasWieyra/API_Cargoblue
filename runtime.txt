@@ -1,1 +1,9 @@
-python-3.11
+streamlit==1.40.2
+requests==2.32.3
+python-dotenv==1.0.1
+supabase==2.10.0
+pandas==2.2.3
+plotly==5.24.1
+python-dateutil==2.9.0.post0
+xmltodict==0.13.0
+streamlit-autorefresh==1.0.1
