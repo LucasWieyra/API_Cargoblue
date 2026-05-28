@@ -1,1 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect width="128" height="128" rx="24" fill="#eaf4ff"/><circle cx="64" cy="64" r="34" fill="none" stroke="#0a6ed1" stroke-width="10"/><circle cx="64" cy="64" r="10" fill="#0a6ed1"/><path d="M64 20v18M64 90v18M20 64h18M90 64h18" stroke="#0a6ed1" stroke-width="8" stroke-linecap="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+  <defs>
+    <linearGradient id="bg" x1="18" y1="8" x2="140" y2="150"><stop stop-color="#EFF6FF"/><stop offset="1" stop-color="#DBEAFE"/></linearGradient>
+    <linearGradient id="blue" x1="45" y1="30" x2="120" y2="130"><stop stop-color="#38BDF8"/><stop offset="1" stop-color="#0A6ED1"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#0A6ED1" flood-opacity=".18"/></filter>
+  </defs>
+  <rect x="12" y="12" width="136" height="136" rx="32" fill="url(#bg)"/>
+  <g filter="url(#shadow)">
+    <circle cx="80" cy="80" r="48" fill="#FFFFFF"/>
+    <circle cx="80" cy="80" r="35" fill="none" stroke="#93C5FD" stroke-width="8"/>
+    <path d="M80 45a35 35 0 0134 43" fill="none" stroke="url(#blue)" stroke-width="10" stroke-linecap="round"/>
+    <path d="M80 80l30-18" stroke="#0F172A" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="80" cy="80" r="12" fill="url(#blue)"/>
+    <path d="M80 25v18M80 117v18M25 80h18M117 80h18" stroke="#0A6ED1" stroke-width="7" stroke-linecap="round" opacity=".9"/>
+  </g>
+</svg>

@@ -1,1 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect width="128" height="128" rx="24" fill="#f0f9ff"/><path d="M64 24a40 40 0 1036 57" fill="none" stroke="#0a6ed1" stroke-width="9" stroke-linecap="round"/><path d="M98 46v34H64" fill="none" stroke="#0a6ed1" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="64" cy="64" r="13" fill="#14b8a6"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+  <defs><linearGradient id="bg" x1="18" y1="10" x2="145" y2="150"><stop stop-color="#F0F9FF"/><stop offset="1" stop-color="#E0F2FE"/></linearGradient><linearGradient id="g" x1="42" y1="35" x2="124" y2="128"><stop stop-color="#38BDF8"/><stop offset="1" stop-color="#0A6ED1"/></linearGradient><filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="7" flood-color="#075985" flood-opacity=".18"/></filter></defs>
+  <rect x="12" y="12" width="136" height="136" rx="32" fill="url(#bg)"/>
+  <g filter="url(#shadow)">
+    <circle cx="80" cy="80" r="42" fill="#FFFFFF"/>
+    <path d="M80 38a42 42 0 1040 55" fill="none" stroke="url(#g)" stroke-width="12" stroke-linecap="round"/>
+    <path d="M122 58v35H88" fill="none" stroke="url(#g)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="80" cy="80" r="15" fill="#14B8A6"/>
+    <path d="M80 55v-12M80 117v-12M105 80h12M43 80h12" stroke="#0F172A" stroke-width="7" stroke-linecap="round" opacity=".35"/>
+  </g>
+</svg>
