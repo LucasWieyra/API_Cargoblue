@@ -1,1 +1,10 @@
-run = "streamlit run app.py --server.address 0.0.0.0 --server.port 8501"
+[theme]
+base = "dark"
+primaryColor = "#38BDF8"
+backgroundColor = "#020617"
+secondaryBackgroundColor = "#0F172A"
+textColor = "#F8FAFC"
+font = "sans serif"
+
+[server]
+headless = true

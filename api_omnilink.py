@@ -1,4 +1,3 @@
-from __future__ import annotations
 import hashlib
 import html
 import os
@@ -26,14 +25,6 @@ def now_iso() -> str:
 
 
 def _env(name: str, default: str = "") -> str:
-    """Lê variável de st.secrets (Streamlit Cloud) ou os.getenv (local/.env)."""
-    try:
-        import streamlit as st
-        val = st.secrets.get(name, None)
-        if val:
-            return str(val).strip().strip('"')
-    except Exception:
-        pass
     return (os.getenv(name, default) or default).strip().strip('"')
 
 
@@ -489,34 +480,15 @@ def get_kpis() -> dict[str, Any]:
         viagens = select_rows("wstt_viagens_telemetria", "placa,distancia_total_percorrida,quantidade_excesso_velocidade,quantidade_freada_brusca,quantidade_aceleracao_brusca", 20000)
         tele = select_rows("wstt_dados_historico_telemetria", "placa,velocidade_maxima,distancia_total,nivel_combustivel_litros", 20000)
         ev = select_rows("wstt_eventos_tracker_telemetria2", "evento_id,placa,velocidade_maxima", 20000)
-
-        def _safe_float(v: Any) -> float:
-            try:
-                return float(v) if v not in (None, "", "None", "null") else 0.0
-            except (TypeError, ValueError):
-                return 0.0
-
-        def _safe_int_field(v: Any) -> int:
-            try:
-                return int(float(v)) if v not in (None, "", "None", "null") else 0
-            except (TypeError, ValueError):
-                return 0
-
-        eventos_viagem = sum(
-            _safe_int_field(x.get("quantidade_excesso_velocidade")) +
-            _safe_int_field(x.get("quantidade_freada_brusca")) +
-            _safe_int_field(x.get("quantidade_aceleracao_brusca"))
-            for x in viagens
-        )
-        velocidades = [_safe_float(x.get("velocidade_maxima")) for x in tele + ev]
+        eventos_viagem = sum(int(x.get("quantidade_excesso_velocidade") or 0) + int(x.get("quantidade_freada_brusca") or 0) + int(x.get("quantidade_aceleracao_brusca") or 0) for x in viagens)
         return {
             "veiculos": len(veic),
             "viagens": len(viagens),
             "telemetria": len(tele),
             "eventos": len(ev),
             "eventos_viagem": eventos_viagem,
-            "km_viagens": round(sum(_safe_float(x.get("distancia_total_percorrida")) for x in viagens), 2),
-            "velocidade_maxima": max(velocidades) if velocidades else 0.0,
+            "km_viagens": round(sum(float(x.get("distancia_total_percorrida") or 0) for x in viagens), 2),
+            "velocidade_maxima": max([float(x.get("velocidade_maxima") or 0) for x in tele + ev] or [0]),
         }
     except Exception:
         return {"veiculos": 0, "viagens": 0, "telemetria": 0, "eventos": 0, "eventos_viagem": 0, "km_viagens": 0, "velocidade_maxima": 0}

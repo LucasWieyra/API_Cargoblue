@@ -149,6 +149,66 @@ create index if not exists idx_raster_evento_placa on public.raster_evento_fim_v
 create index if not exists idx_raster_evento_data on public.raster_evento_fim_viagem (data_real_fim);
 
 -- ============================================================
+-- RASTER - STATUS VIAGEM (getStatusViagem)
+-- ============================================================
+create table if not exists public.raster_status_viagem (
+  chave text primary key,
+  cod_solicitacao bigint,
+  cod_pre_solicitacao bigint,
+  cod_filial bigint,
+  cod_perfil_seguranca bigint,
+  cod_rota bigint,
+  placa_veiculo text,
+  placa_carreta1_original text,
+  placa_carreta1_atual text,
+  cpf_motorista1_original text,
+  cpf_motorista1_atual text,
+  cnpj_transportador text,
+  cnpj_cliente_orig text,
+  cnpj_cliente_dest text,
+  status_viagem text,
+  data_prev_inicio timestamptz,
+  data_prev_fim timestamptz,
+  data_real_inicio timestamptz,
+  data_hora_ult_posicao timestamptz,
+  latitude_ult_posicao numeric,
+  longitude_ult_posicao numeric,
+  ref_ult_posicao text,
+  raw jsonb,
+  payload jsonb,
+  synced_at timestamptz default now()
+);
+
+alter table public.raster_status_viagem add column if not exists cod_solicitacao bigint;
+alter table public.raster_status_viagem add column if not exists cod_pre_solicitacao bigint;
+alter table public.raster_status_viagem add column if not exists cod_filial bigint;
+alter table public.raster_status_viagem add column if not exists cod_perfil_seguranca bigint;
+alter table public.raster_status_viagem add column if not exists cod_rota bigint;
+alter table public.raster_status_viagem add column if not exists placa_veiculo text;
+alter table public.raster_status_viagem add column if not exists placa_carreta1_original text;
+alter table public.raster_status_viagem add column if not exists placa_carreta1_atual text;
+alter table public.raster_status_viagem add column if not exists cpf_motorista1_original text;
+alter table public.raster_status_viagem add column if not exists cpf_motorista1_atual text;
+alter table public.raster_status_viagem add column if not exists cnpj_transportador text;
+alter table public.raster_status_viagem add column if not exists cnpj_cliente_orig text;
+alter table public.raster_status_viagem add column if not exists cnpj_cliente_dest text;
+alter table public.raster_status_viagem add column if not exists status_viagem text;
+alter table public.raster_status_viagem add column if not exists data_prev_inicio timestamptz;
+alter table public.raster_status_viagem add column if not exists data_prev_fim timestamptz;
+alter table public.raster_status_viagem add column if not exists data_real_inicio timestamptz;
+alter table public.raster_status_viagem add column if not exists data_hora_ult_posicao timestamptz;
+alter table public.raster_status_viagem add column if not exists latitude_ult_posicao numeric;
+alter table public.raster_status_viagem add column if not exists longitude_ult_posicao numeric;
+alter table public.raster_status_viagem add column if not exists ref_ult_posicao text;
+alter table public.raster_status_viagem add column if not exists raw jsonb;
+alter table public.raster_status_viagem add column if not exists payload jsonb;
+alter table public.raster_status_viagem add column if not exists synced_at timestamptz default now();
+
+create index if not exists idx_raster_status_viagem_placa on public.raster_status_viagem (placa_veiculo);
+create index if not exists idx_raster_status_viagem_status on public.raster_status_viagem (status_viagem);
+create index if not exists idx_raster_status_viagem_sync on public.raster_status_viagem (synced_at);
+
+-- ============================================================
 -- OMNILINK / WSTT
 -- ============================================================
 

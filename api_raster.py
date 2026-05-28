@@ -1,8 +1,7 @@
-from __future__ import annotations
 import os
 import json
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date, timedelta
 from typing import Any
 
 import requests
@@ -19,14 +18,6 @@ def now_iso() -> str:
 
 
 def _env(name: str, default: str = "") -> str:
-    """Lê variável de st.secrets (Streamlit Cloud) ou os.getenv (local/.env)."""
-    try:
-        import streamlit as st
-        val = st.secrets.get(name, None)
-        if val:
-            return str(val).strip().strip('"')
-    except Exception:
-        pass
     return (os.getenv(name, default) or default).strip().strip('"')
 
 
@@ -84,6 +75,38 @@ def normalize_placa(value: Any) -> str | None:
     if value in (None, ""):
         return None
     return str(value).upper().replace("-", "").replace(" ", "").strip() or None
+
+
+def _periodo_mes_anterior_atual() -> tuple[str, str]:
+    """Retorna do 1º dia do mês anterior até hoje.
+
+    Uso padrão para rotinas Raster por período sem precisar preencher nada.
+    """
+    hoje = date.today()
+    primeiro_mes_atual = hoje.replace(day=1)
+    ultimo_mes_anterior = primeiro_mes_atual - timedelta(days=1)
+    primeiro_mes_anterior = ultimo_mes_anterior.replace(day=1)
+    return primeiro_mes_anterior.isoformat(), hoje.isoformat()
+
+
+def _periodo_raster_evento_fim() -> tuple[str, str]:
+    """Período automático para getEventoFimViagem.
+
+    Padrão: mês anterior + mês atual. Se quiser usar janela curta, configure
+    RASTER_EVENTO_FIM_DIAS no .env/Secrets.
+    """
+    dias_txt = _env("RASTER_EVENTO_FIM_DIAS", "")
+    if dias_txt:
+        dias = to_int(dias_txt) or 1
+        dias = max(1, min(dias, 62))
+        hoje = date.today()
+        return (hoje - timedelta(days=dias - 1)).isoformat(), hoje.isoformat()
+    return _periodo_mes_anterior_atual()
+
+
+def _safe_key(*parts: Any) -> str:
+    text = "-".join(str(p) for p in parts if p not in (None, "", "None"))
+    return text[:180] if text else f"sem-chave-{int(time.time())}"
 
 
 def call_raster(metodo: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -208,35 +231,20 @@ def sync_sm_abertas() -> int:
 def _evento_fim_payload() -> dict[str, Any]:
     """Payload seguro para getEventoFimViagem.
 
-    Chamar esse método sem filtro pode ser pesado e, em alguns ambientes Raster,
-    retorna HTTP_ERROR sem detalhar no painel. Por isso enviamos um período curto
-    por padrão. Os campos abaixo podem ser controlados por Secrets/.env:
-      RASTER_EVENTO_FIM_DIAS=1
-      RASTER_EVENTO_FIM_STATUS=F
-
-    IMPORTANTE: a Raster (DataSnap/Delphi) espera datas no formato DD/MM/YYYY.
-    Enviar YYYY-MM-DD faz a API rejeitar silenciosamente e retornar lista vazia.
+    Padrão automático: mês anterior + mês atual, sem precisar preencher nada.
+    O manual permite DataInicial/DataFinal/StatusViagem/Placa como filtros opcionais.
     """
-    from datetime import date, timedelta
-
-    dias = to_int(_env("RASTER_EVENTO_FIM_DIAS", "1")) or 1
-    if dias < 1:
-        dias = 1
-    if dias > 7:
-        dias = 7
-
-    hoje = date.today()
-    inicio = hoje - timedelta(days=dias - 1)
+    data_inicial, data_final = _periodo_raster_evento_fim()
     payload: dict[str, Any] = {
-        "DataInicial": inicio.strftime("%d/%m/%Y"),
-        "DataFinal": hoje.strftime("%d/%m/%Y"),
+        "DataInicial": data_inicial,
+        "DataFinal": data_final,
     }
 
-    status = _env("RASTER_EVENTO_FIM_STATUS", "F")
+    status = _env("RASTER_EVENTO_FIM_STATUS", "T")
     if status:
         payload["StatusViagem"] = status
 
-    placa = _env("RASTER_EVENTO_FIM_PLACA", "")
+    placa = normalize_placa(_env("RASTER_EVENTO_FIM_PLACA", ""))
     if placa:
         payload["Placa"] = placa
 
@@ -307,8 +315,114 @@ def sync_evento_fim_viagem() -> int:
         log_execucao(rotina, "sucesso", total)
         return total
     except Exception as exc:
+        erro = _resumo_erro_raster({
+            "mensagem": "Exception em getEventoFimViagem",
+            "payload_enviado": _evento_fim_payload(),
+            "erro": str(exc),
+        })
+        log_execucao(rotina, "erro", 0, erro)
+        print(erro)
+        return 0
+
+
+def _coletar_placas_raster_status(limite: int = 50) -> list[str]:
+    """Coleta placas automaticamente de várias bases já sincronizadas."""
+    placas: list[str] = []
+    vistos: set[str] = set()
+
+    fontes = [
+        ("raster_sm_geradas", "placa"),
+        ("raster_evento_fim_viagem", "placa_veiculo"),
+        ("raster_checklist_resultado", "veiculo"),
+        ("wstt_veiculos", "placa"),
+        ("wstt_viagens_telemetria", "placa"),
+    ]
+    for tabela, coluna in fontes:
+        try:
+            for p in select_distinct_values(tabela, coluna):
+                placa = normalize_placa(p)
+                if placa and placa not in vistos:
+                    vistos.add(placa)
+                    placas.append(placa)
+                    if len(placas) >= limite:
+                        return placas
+        except Exception:
+            continue
+    return placas
+
+
+def _row_status_viagem(data: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    placa = normalize_placa(data.get("PlacaVeiculo") or payload.get("Placa"))
+    cod_solicitacao = to_int(data.get("CodSolicitacao") or payload.get("CodSolicitacao"))
+    cod_pre = to_int(data.get("CodPreSolicitacao") or payload.get("CodPreSolicitacao"))
+    chave = _safe_key(cod_solicitacao, cod_pre, placa, data.get("StatusViagem"), payload.get("Placa"))
+    return {
+        "chave": chave,
+        "cod_solicitacao": cod_solicitacao,
+        "cod_pre_solicitacao": cod_pre,
+        "cod_filial": to_int(data.get("CodFilial")),
+        "cod_perfil_seguranca": to_int(data.get("CodPerfilSeguranca")),
+        "cod_rota": to_int(data.get("CodRota")),
+        "placa_veiculo": placa,
+        "placa_carreta1_original": normalize_placa(data.get("PlacaCarreta1Original")),
+        "placa_carreta1_atual": normalize_placa(data.get("PlacaCarreta1Atual")),
+        "cpf_motorista1_original": data.get("CpfMotorista1Original"),
+        "cpf_motorista1_atual": data.get("CpfMotorista1Atual"),
+        "cnpj_transportador": data.get("CnpjTransportador") or data.get("CNPJTransportador"),
+        "cnpj_cliente_orig": data.get("CnpjClienteOrig") or data.get("CNPJClienteOrig"),
+        "cnpj_cliente_dest": data.get("CnpjClienteDest") or data.get("CNPJClienteDest"),
+        "status_viagem": data.get("StatusViagem"),
+        "data_prev_inicio": parse_ts(data.get("DataHoraPrevIni")),
+        "data_prev_fim": parse_ts(data.get("DataHoraPrevFim")),
+        "data_real_inicio": parse_ts(data.get("DataHoraRealIni")),
+        "data_hora_ult_posicao": parse_ts(data.get("DataHoraUltPosicao")),
+        "latitude_ult_posicao": to_float(data.get("LatitudeUltPosicao")),
+        "longitude_ult_posicao": to_float(data.get("LongitudeUltPosicao")),
+        "ref_ult_posicao": data.get("RefUltPosicao"),
+        "raw": data,
+        "payload": payload,
+        "synced_at": now_iso(),
+    }
+
+
+def sync_status_viagem(limite: int | None = None) -> int:
+    """Consulta getStatusViagem automaticamente por placas já existentes.
+
+    Não exige preenchimento manual. Usa placas de SM abertas, viagens, checklist e WSTT.
+    """
+    rotina = "Status viagem"
+    try:
+        limite_real = limite or to_int(_env("RASTER_STATUS_VIAGEM_LIMITE", "50")) or 50
+        limite_real = max(1, min(int(limite_real), 500))
+        placas = _coletar_placas_raster_status(limite_real)
+        if not placas:
+            log_execucao(rotina, "sucesso", 0, "Nenhuma placa disponível para getStatusViagem.")
+            return 0
+
+        delay = to_float(_env("RASTER_DELAY_STATUS_VIAGEM_SECONDS", "1")) or 1
+        rows: list[dict[str, Any]] = []
+        erros: list[str] = []
+        for idx, placa in enumerate(placas, start=1):
+            payload = {"Placa": placa}
+            try:
+                data = call_raster("getStatusViagem", payload)
+                if not _ok(data):
+                    erros.append(f"{placa}: {data.get('CodErro')} {data.get('MsgErro')}")
+                    # salva retorno de erro como raw para diagnóstico, mas tabela visual não mostra erro técnico
+                    data = {**data, "PlacaVeiculo": placa}
+                rows.append(_row_status_viagem(data, payload))
+            except Exception as exc:
+                erros.append(f"{placa}: {exc}")
+            if idx < len(placas) and delay > 0:
+                time.sleep(delay)
+
+        total = upsert_rows("raster_status_viagem", rows, "chave") if rows else 0
+        log_execucao(rotina, "sucesso" if not erros else "parcial", total, " | ".join(erros[:20]) if erros else None)
+        return total
+    except Exception as exc:
         log_execucao(rotina, "erro", 0, str(exc))
-        raise
+        return 0
+
 
 
 def sync_historico_testes() -> int:

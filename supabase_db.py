@@ -1,4 +1,3 @@
-from __future__ import annotations
 import os
 from typing import Any
 
@@ -8,24 +7,11 @@ from supabase import create_client
 
 load_dotenv()
 
-
-def _get_secret(name: str, default: str = "") -> str:
-    """Lê variável de st.secrets (Streamlit Cloud) ou os.getenv (local/.env)."""
-    try:
-        import streamlit as st
-        val = st.secrets.get(name, None)
-        if val:
-            return str(val).strip().strip('"')
-    except Exception:
-        pass
-    return (os.getenv(name, default) or default).strip().strip('"')
-
-
-SUPABASE_URL = _get_secret("SUPABASE_URL")
-SUPABASE_SERVICE_KEY = _get_secret("SUPABASE_SERVICE_KEY")
+SUPABASE_URL = (os.getenv("SUPABASE_URL") or "").strip().strip('"')
+SUPABASE_SERVICE_KEY = (os.getenv("SUPABASE_SERVICE_KEY") or "").strip().strip('"')
 
 if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-    raise RuntimeError("Configure SUPABASE_URL e SUPABASE_SERVICE_KEY no arquivo .env ou em Secrets no Streamlit Cloud")
+    raise RuntimeError("Configure SUPABASE_URL e SUPABASE_SERVICE_KEY no arquivo .env")
 
 sb = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
@@ -95,22 +81,11 @@ def insert_rows(table: str, rows: list[dict[str, Any]], batch_size: int = 300) -
 
 
 def select_rows(table: str, columns: str = "*", limit: int = 1000, order_by: str | None = None, desc: bool = True) -> list[dict[str, Any]]:
-    try:
-        query = sb.table(table).select(columns).limit(limit)
-        if order_by:
-            query = query.order(order_by, desc=desc)
-        result = query.execute()
-        return result.data or []
-    except APIError as exc:
-        print(f"\n========== ERRO SUPABASE SELECT ==========")
-        print(f"Tabela: {table}")
-        print(f"Colunas: {columns}")
-        print(f"Erro: {exc}")
-        print("==========================================\n")
-        return []
-    except Exception as exc:
-        print(f"[select_rows] Erro inesperado em '{table}': {exc}")
-        return []
+    query = sb.table(table).select(columns).limit(limit)
+    if order_by:
+        query = query.order(order_by, desc=desc)
+    result = query.execute()
+    return result.data or []
 
 
 def select_distinct_values(table: str, column: str, limit: int = 20000) -> list[str]:

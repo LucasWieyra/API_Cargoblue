@@ -1,4 +1,3 @@
-from __future__ import annotations
 import os
 import json
 import uuid
@@ -413,15 +412,13 @@ def apply_filters(df: pd.DataFrame, plate_filter: str = "", search_text: str = "
     if plate_filter:
         plate_cols = [c for c in out.columns if "placa" in c.lower() or c.lower() == "veiculo"]
         if plate_cols:
-            mask = None
+            mask = False
             for col in plate_cols:
                 try:
-                    col_mask = normalize_plate_series(out[col]).str.contains(plate_filter, na=False)
-                    mask = col_mask if mask is None else (mask | col_mask)
+                    mask = mask | normalize_plate_series(out[col]).str.contains(plate_filter, na=False)
                 except Exception:
                     pass
-            if mask is not None:
-                out = out[mask]
+            out = out[mask] if not isinstance(mask, bool) else out
     if search_text:
         txt = search_text.lower().strip()
         mask = out.astype(str).apply(lambda row: row.str.lower().str.contains(txt, na=False)).any(axis=1)
@@ -581,6 +578,12 @@ def auto_cycle(rotinas: list[str], dias_viagens: int, dias_telemetria: int, limi
             logs.append(f"Raster viagens finalizadas: ignorada por erro ({exc})")
             terminal_log(f"Erro Raster • viagens finalizadas: {exc}", "ERRO")
 
+    if "Raster status viagem" in rotinas:
+        terminal_log("Iniciando Raster • status viagem")
+        qtd = api_raster.sync_status_viagem(limite=limite_placas)
+        logs.append(f"Raster status viagem: {qtd}")
+        terminal_log(f"Finalizado Raster • status viagem: {qtd} registro(s)", "OK")
+
     if "WSTT frota" in rotinas:
         terminal_log("Iniciando WSTT • frota")
         qtd = api_omnilink.sync_veiculos()
@@ -651,6 +654,7 @@ def controle_automatico():
         [
             "Raster SM",
             "Raster viagens",
+            "Raster status viagem",
             "Raster checklist existente válido",
             
             "WSTT frota",
@@ -658,10 +662,10 @@ def controle_automatico():
             "WSTT telemetria",
             "WSTT eventos",
         ],
-        default=["Raster SM", "Raster checklist existente válido", "WSTT frota", "WSTT viagens", "WSTT telemetria", "WSTT eventos"],
+        default=["Raster SM", "Raster status viagem", "Raster checklist existente válido", "WSTT frota", "WSTT viagens", "WSTT telemetria", "WSTT eventos"],
     )
 
-    st.sidebar.caption("Checklist automático roda junto no mesmo ciclo, mas somente consulta checklists existentes; não cria nada.")
+    st.sidebar.caption("Automático inclui StatusViagem e checklist somente consulta. Não cria checklist e usa período automático mês anterior + mês atual para eventos Raster.")
 
     if st.session_state.auto_api_on:
         st.sidebar.success("Automático ligado")
@@ -861,7 +865,7 @@ elif page_key == "Raster":
     render_sync_panel("Raster — Operação, cadastros e checklist", "Fluxo seguro: getTabela → consultar CodCheckList existente → getGerarResultadoCheckList. Não cria checklist.")
     st.markdown("<div class='info-box'><b>Fluxo ajustado:</b> o sistema <b>não cria checklist</b>. Ele apenas consulta <b>FILIAIS / PERFIL_SEGURANCA</b> com <code>getTabela</code> e roda <code>getGerarResultadoCheckList</code> usando <b>CodCheckList já existente</b>. <b>Produtos é obrigatório no seu ambiente Raster e será enviado automaticamente pelo perfil</b>.</div>", unsafe_allow_html=True)
 
-    b1, b2, b3, b4, b5 = st.columns(5)
+    b1, b2, b3, b4, b5, b6 = st.columns(6)
     with b1:
         if st.button("🔄 SM abertas", use_container_width=True):
             terminal_log("Iniciando Raster • SM abertas")
@@ -906,6 +910,14 @@ elif page_key == "Raster":
                 resultado = res.get('resultado', res) if isinstance(res, dict) else {}
                 st.success(f"Consulta concluída. Histórico encontrado: {res.get('historico_codchecklist',0) if isinstance(res,dict) else 0} | Consultados: {resultado.get('consultados',0)} | Salvos: {resultado.get('salvos',0)} | Com datas: {resultado.get('validos',0)} | Status: {resultado.get('status',{})}. Nenhum checklist foi criado.")
 
+    with b6:
+        if st.button("📍 Status viagem", use_container_width=True):
+            terminal_log("Iniciando Raster • getStatusViagem automático")
+            with st.spinner("Consultando status das viagens por placa automaticamente..."):
+                qtd = api_raster.sync_status_viagem()
+                terminal_log(f"Finalizado Raster • getStatusViagem: {qtd} registro(s)", "OK")
+                st.success(f"{qtd} status de viagem sincronizado(s).")
+
     with st.expander("1) Consultar tabela específica da Raster", expanded=False):
         st.caption("Use para descobrir códigos reais de filial, perfil de segurança, produtos ou erros do webservice.")
         nomes = ["FILIAIS", "PERFIL_SEGURANCA", "PRODUTOS", "ERROS_WEBSERVICE", "TIPOS_VEICULO", "TECNOLOGIAS"]
@@ -917,7 +929,17 @@ elif page_key == "Raster":
                 terminal_log(f"Finalizado Raster • getTabela {nome_tabela}: {qtd} registro(s)", "OK")
                 st.success(f"{qtd} registro(s) salvo(s) em raster_tabelas.")
 
-    with st.expander("2) Consultar checklists já existentes", expanded=True):
+    with st.expander("2) Status viagem automático — getStatusViagem", expanded=False):
+        st.caption("Consulta getStatusViagem sem preencher placa: o app coleta placas de SM abertas, viagens, checklist e WSTT. Não cria nada.")
+        limite_status = st.number_input("Limite de placas para status viagem", min_value=1, max_value=500, value=50, step=10, key="limite_status_viagem")
+        if st.button("Executar getStatusViagem automático", use_container_width=True):
+            terminal_log("Iniciando Raster • getStatusViagem automático")
+            with st.spinner("Consultando status das viagens na Raster..."):
+                qtd = api_raster.sync_status_viagem(limite=int(limite_status))
+                terminal_log(f"Finalizado Raster • getStatusViagem: {qtd} registro(s)", "OK")
+                st.success(f"{qtd} registro(s) sincronizado(s) em raster_status_viagem.")
+
+    with st.expander("3) Consultar checklists já existentes", expanded=True):
         st.markdown("<div class='info-box'><b>Importante:</b> esta tela não chama <code>setIncluirCheckList</code>. Ela só consulta checklists que já existem e que tenham <b>CodCheckList</b> salvo em <code>raster_checklist_solicitacoes</code> ou <code>raster_checklist_resultado</code>.</div>", unsafe_allow_html=True)
         f1, f2, f3, f4 = st.columns(4)
         with f1:
@@ -943,7 +965,7 @@ elif page_key == "Raster":
 
         st.caption("Agora o dashboard mantém todos os status do checklist. DataGeracao e DataExpiracao aparecem quando a Raster devolver; os demais status também ficam visíveis para acompanhamento operacional.")
 
-    with st.expander("3) Consulta manual — getGerarResultadoCheckList", expanded=False):
+    with st.expander("4) Consulta manual — getGerarResultadoCheckList", expanded=False):
         st.caption("Depois que existir CodCheckList, consulte o resultado. Filial e perfil são necessários; Produtos será enviado automaticamente porque a Raster está exigindo esse campo na consulta.")
         f1, f2, f3 = st.columns(3)
         with f1:
@@ -976,26 +998,31 @@ elif page_key == "Raster":
     with m[4]: metric_card("Pendentes", r.get("pendentes", 0), "Checklist")
     with m[5]: metric_card("Desvios", r.get("desvios", 0), "Rota")
 
-    tabs = st.tabs(["Status por veículo", "Viagens finalizadas", "SM abertas", "Tabelas Raster", "Solicitações checklist", "Resultado checklist", "Logs"])
+    tabs = st.tabs(["Status por veículo", "Status viagem", "Viagens finalizadas", "SM abertas", "Tabelas Raster", "Solicitações checklist", "Resultado checklist", "Logs"])
     with tabs[0]:
         st.subheader("Situação atual por veículo")
         show_dataframe(get_raster_status_df(), height=500, style=True, plate_filter=plate_filter, search_text=global_search)
     with tabs[1]:
+        st.subheader("Status viagem Raster — getStatusViagem")
+        st.caption("Consulta automática por placa, sem preencher nada. A base usa placas já encontradas em SM, viagens, checklist e WSTT.")
+        df_status_v = df_table("raster_status_viagem", "chave,cod_solicitacao,cod_pre_solicitacao,cod_filial,cod_perfil_seguranca,cod_rota,placa_veiculo,status_viagem,data_prev_inicio,data_prev_fim,data_real_inicio,data_hora_ult_posicao,latitude_ult_posicao,longitude_ult_posicao,ref_ult_posicao,synced_at", 20000, "synced_at")
+        show_dataframe(df_status_v, height=500, plate_filter=plate_filter, search_text=global_search)
+    with tabs[2]:
         st.subheader("Viagens finalizadas Raster")
         df = df_table("raster_evento_fim_viagem", "cod_solicitacao,placa_veiculo,status_viagem,status_checklist,aptidao_operacional,dentro_prazo,velocidade_media,maior_velocidade,tempo_parado,desvios_rota,eventos_velocidade,data_real_fim,synced_at", 20000, "synced_at")
         show_dataframe(df, height=500, style=True, plate_filter=plate_filter, search_text=global_search)
-    with tabs[2]:
+    with tabs[3]:
         st.subheader("SM abertas")
         show_dataframe(df_table("raster_sm_geradas", "*", 20000, "synced_at"), height=500, plate_filter=plate_filter, search_text=global_search)
-    with tabs[3]:
+    with tabs[4]:
         st.subheader("Tabelas de apoio da Raster")
         st.caption("Dados vindos do método getTabela: FILIAIS, PERFIL_SEGURANCA, PRODUTOS e ERROS_WEBSERVICE.")
         show_dataframe(df_table("raster_tabelas", "tabela,codigo,descricao,dados,synced_at", 20000, "synced_at"), height=500, search_text=global_search)
-    with tabs[4]:
+    with tabs[5]:
         st.subheader("Solicitações de checklist")
         st.caption("Tabela de CodCheckList já existentes. O app apenas lê esses códigos para consultar resultado; não cria novas solicitações.")
         show_dataframe(df_table("raster_checklist_solicitacoes", "chave,cod_checklist,veiculo,cod_filial,tipo,vinculo,sensor_temperatura,synced_at", 20000, "synced_at"), height=500, plate_filter=plate_filter, search_text=global_search)
-    with tabs[5]:
+    with tabs[6]:
         st.subheader("Resultado oficial do checklist")
         st.caption("Tabela limpa operacional: mostra todos os status do checklist, sem raw, CodErro, MsgErro ou erro técnico. DataGeracao/DataExpiracao aparecem quando a Raster devolver esses campos.")
         df_resultado = df_table("raster_checklist_resultado", "cod_resultado,cod_checklist,veiculo,cod_filial,cod_perfil_seguranca,status,resultado,apto,data_geracao,data_expiracao,url_documento,synced_at", 20000, "synced_at")
@@ -1006,7 +1033,7 @@ elif page_key == "Raster":
             show_dataframe(df_resultado, height=500, plate_filter=plate_filter, search_text=global_search)
         else:
             st.info("Nenhum resultado de checklist encontrado.")
-    with tabs[6]:
+    with tabs[7]:
         st.subheader("Logs de integração — Raster")
         show_dataframe(df_table("integracao_execucoes", "origem,rotina,status,qtd_registros,executado_em", 200, "executado_em"), height=500, search_text="Raster" if not global_search else global_search)
 
@@ -1261,7 +1288,7 @@ elif page_key == "Terminal":
         st.caption("Essa área não aparece nas tabelas operacionais. Use apenas para copiar o erro real quando a Raster retornar HTTP_ERROR.")
         diag = df_table("integracao_execucoes", "origem,rotina,status,qtd_registros,erro,executado_em", 50, "executado_em")
         if not diag.empty:
-            diag = diag[(diag["origem"] == "Raster") & (diag["status"] == "erro")] if "origem" in diag.columns and "status" in diag.columns else diag
+            diag = diag[(diag.get("origem") == "Raster") & (diag.get("status") == "erro")] if "origem" in diag.columns and "status" in diag.columns else diag
         show_dataframe(diag, height=360, search_text=global_search)
 
 elif page_key == "Supabase / SQL":
