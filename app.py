@@ -64,19 +64,243 @@ st.set_page_config(
 
 CSS = """
 <style>
-/* SAFE MODE: sem CSS de fundo/cor para não deixar tela branca/preta no Streamlit Cloud. */
-.block-container { max-width: 1520px; padding-top: 1rem; padding-bottom: 2rem; }
-.terminal-box { white-space: pre-wrap; font-family: monospace; font-size: 12px; border: 1px solid rgba(128,128,128,.25); border-radius: 10px; padding: 12px; overflow:auto; }
-.kpi-card, .panel, .sync-card, .metric-tile { border: 1px solid rgba(128,128,128,.25); border-radius: 16px; padding: 14px; margin-bottom: 8px; }
-.kpi-value { font-size: 28px; font-weight: 800; }
-.kpi-label, .kpi-help, .section-desc, .small-muted { opacity: .75; }
-.hero-title { font-size: 34px; font-weight: 800; }
-.badge { display:inline-block; padding: 4px 10px; border: 1px solid rgba(128,128,128,.25); border-radius: 999px; margin: 4px 4px 4px 0; }
-.info-box, .warn-box, .auto-box { border: 1px solid rgba(128,128,128,.25); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+/* =========================================================
+   UI SYSTEM — Minimalista estilo SAP/Fiori CRM
+   Mantém o tema do Streamlit (dark/light), sem travar fundo.
+   ========================================================= */
+:root {
+  --sap-blue: #0a6ed1;
+  --sap-blue-2: #0b74de;
+  --sap-green: #107e3e;
+  --sap-orange: #df6e0c;
+  --sap-red: #bb0000;
+  --sap-border: rgba(128, 128, 128, .20);
+  --sap-border-strong: rgba(128, 128, 128, .34);
+  --sap-surface: rgba(127, 127, 127, .055);
+  --sap-surface-2: rgba(127, 127, 127, .095);
+  --sap-shadow: 0 8px 22px rgba(0, 0, 0, .10);
+  --sap-radius: 12px;
+}
+
+.block-container {
+  max-width: 1540px;
+  padding-top: 1.05rem;
+  padding-bottom: 2.25rem;
+}
+
+/* Sidebar mais corporativa */
+[data-testid="stSidebar"] {
+  border-right: 1px solid var(--sap-border);
+}
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stSidebar"] label {
+  font-size: .88rem;
+}
+[data-testid="stSidebar"] .stRadio > div {
+  gap: 4px;
+}
+[data-testid="stSidebar"] .stRadio label {
+  border-radius: 10px;
+  padding: 4px 8px;
+}
+
+/* Tipografia */
+h1, h2, h3 {
+  letter-spacing: -0.025em;
+}
+h1 { font-weight: 760; }
+h2 { font-weight: 720; }
+h3 { font-weight: 680; }
+
+/* Header Fiori */
+.hero {
+  border: 1px solid var(--sap-border);
+  border-radius: 18px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, rgba(10,110,209,.12), rgba(127,127,127,.035) 58%, rgba(16,126,62,.055));
+  box-shadow: var(--sap-shadow);
+}
+.hero-grid {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  align-items: center;
+  gap: 16px;
+}
+.logo-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 68px;
+  border-radius: 16px;
+  border: 1px solid rgba(10,110,209,.28);
+  background: rgba(10,110,209,.10);
+  font-size: 34px;
+}
+.hero-title {
+  font-size: 31px;
+  line-height: 1.08;
+  font-weight: 780;
+  letter-spacing: -0.035em;
+  margin-bottom: 4px;
+}
+.hero-subtitle, .hero-caption, .section-desc, .small-muted, .kpi-help, .kpi-label {
+  opacity: .72;
+}
+.hero-subtitle {
+  margin: 0 0 8px 0;
+  font-size: .98rem;
+}
+.hero-caption {
+  margin: 8px 0 0 0;
+  font-size: .82rem;
+}
+
+/* Badges status */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  margin: 4px 6px 4px 0;
+  font-size: .75rem;
+  font-weight: 650;
+  border: 1px solid var(--sap-border);
+  background: var(--sap-surface);
+}
+.badge.ok { color: #2e9f5f; border-color: rgba(46,159,95,.35); background: rgba(46,159,95,.10); }
+.badge.info { color: #0a6ed1; border-color: rgba(10,110,209,.35); background: rgba(10,110,209,.10); }
+.badge.warn { color: #df6e0c; border-color: rgba(223,110,12,.35); background: rgba(223,110,12,.10); }
+.badge.error { color: #bb0000; border-color: rgba(187,0,0,.35); background: rgba(187,0,0,.10); }
+
+/* Painéis e cards */
+.kpi-card, .panel, .sync-card, .metric-tile, .info-box, .warn-box, .auto-box, .terminal-box {
+  border: 1px solid var(--sap-border);
+  border-radius: var(--sap-radius);
+  background: var(--sap-surface);
+  box-shadow: 0 2px 8px rgba(0,0,0,.045);
+}
+.kpi-card, .panel, .sync-card, .metric-tile {
+  padding: 14px 15px;
+  margin-bottom: 10px;
+}
+.kpi-card:hover, .panel:hover, .sync-card:hover, .metric-tile:hover {
+  border-color: rgba(10,110,209,.34);
+  background: var(--sap-surface-2);
+}
+.kpi-value {
+  font-size: 27px;
+  line-height: 1.1;
+  font-weight: 780;
+  letter-spacing: -0.03em;
+}
+.kpi-label {
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .055em;
+  margin-bottom: 5px;
+}
+.kpi-help {
+  font-size: .78rem;
+  margin-top: 5px;
+}
+.metric-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin: 10px 0 14px 0;
+}
+.metric-tile-label {
+  font-size: .76rem;
+  opacity: .70;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.metric-tile-value {
+  font-size: 20px;
+  font-weight: 760;
+  margin-top: 4px;
+}
+
+/* Caixas de mensagens */
+.info-box, .warn-box, .auto-box {
+  padding: 12px 14px;
+  margin: 10px 0;
+}
+.info-box { border-left: 4px solid var(--sap-blue); }
+.warn-box { border-left: 4px solid var(--sap-orange); }
+.auto-box { border-left: 4px solid var(--sap-green); }
+
+/* Terminal */
+.terminal-box {
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 12px 14px;
+  overflow: auto;
+  border-left: 4px solid rgba(10,110,209,.55);
+}
+
+/* Controles Streamlit */
+.stButton > button, .stDownloadButton > button, button[kind="secondary"], button[kind="primary"] {
+  border-radius: 9px !important;
+  border: 1px solid var(--sap-border-strong) !important;
+  font-weight: 650 !important;
+  min-height: 38px;
+  box-shadow: none !important;
+}
+.stButton > button:hover, .stDownloadButton > button:hover {
+  border-color: var(--sap-blue) !important;
+  color: var(--sap-blue) !important;
+}
+.stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] > div {
+  border-radius: 9px !important;
+}
+
+/* Dataframes com ar de sistema empresarial */
+[data-testid="stDataFrame"] {
+  border: 1px solid var(--sap-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+[data-testid="stDataFrame"] div[role="columnheader"] {
+  font-weight: 700 !important;
+}
+
+/* Tabs e expanders */
+.stTabs [data-baseweb="tab-list"] {
+  gap: 6px;
+  border-bottom: 1px solid var(--sap-border);
+}
+.stTabs [data-baseweb="tab"] {
+  border-radius: 10px 10px 0 0;
+  padding: 9px 12px;
+  font-weight: 650;
+}
+.streamlit-expanderHeader {
+  font-weight: 650;
+}
+
+/* Separadores */
+hr {
+  border-color: var(--sap-border);
+  margin: 1.1rem 0;
+}
+
+/* Remove exageros visuais, mantendo minimalismo */
+[data-testid="stMetric"] {
+  border: 1px solid var(--sap-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--sap-surface);
+}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
-st.caption("✅ App carregado no Streamlit Cloud")
+st.caption("SAP-style cockpit • Raster + Omnilink/WSTT")
 
 
 def require_login() -> bool:
@@ -192,9 +416,9 @@ def header():
     with cols[0]:
         st.markdown("<div class='logo-wrap' style='font-size:42px;width:88px;height:88px;'>🚚</div>", unsafe_allow_html=True)
     with cols[1]:
-        st.markdown("<div class='hero-title'>Central Raster + Omnilink/WSTT</div>", unsafe_allow_html=True)
+        st.markdown("<div class='hero-title'>Central Operacional Raster + Omnilink/WSTT</div>", unsafe_allow_html=True)
         st.markdown(
-            "<p class='hero-subtitle'>Sincronização separada das APIs, visão executiva, análise operacional por placa e estrutura Supabase organizada.</p>",
+            "<p class='hero-subtitle'>Cockpit minimalista para integrações, viagens, telemetria, documentos, checklist e execução automática.</p>",
             unsafe_allow_html=True,
         )
         st.markdown(

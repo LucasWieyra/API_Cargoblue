@@ -46,3 +46,31 @@ WSTT_USUARIO = "frota@cargoblue.com.br"
 WSTT_SENHA = "SUA_SENHA_WSTT"
 
 Importante: não suba .env com senhas no GitHub.
+
+## getStatusViagem com documentos CTE/CARGA
+
+A rotina Raster > Status viagem agora consulta automaticamente por placa e também por documentos já conhecidos.
+
+Por padrão ela usa documentos dos tipos:
+
+```toml
+RASTER_STATUS_DOCUMENTOS_TIPOS = "CTE,CARGA"
+```
+
+Se quiser consultar também outros documentos retornados pela Raster, ajuste no Streamlit Secrets:
+
+```toml
+RASTER_STATUS_DOCUMENTOS_TIPOS = "CTE,CARGA,SHIPMENT,OUTROS"
+```
+
+O app não cria nada na Raster. Ele apenas consulta `getStatusViagem` usando payloads como:
+
+```json
+{"Documentos":[{"Tipo":"CTE","Numero":"1234"}]}
+```
+
+ou
+
+```json
+{"Documentos":[{"Tipo":"CARGA","Numero":"4192"}]}
+```
