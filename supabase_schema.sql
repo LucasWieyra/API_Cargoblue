@@ -174,6 +174,9 @@ create table if not exists public.raster_status_viagem (
   latitude_ult_posicao numeric,
   longitude_ult_posicao numeric,
   ref_ult_posicao text,
+  documentos jsonb,
+  documentos_resumo text,
+  qtd_documentos integer default 0,
   raw jsonb,
   payload jsonb,
   synced_at timestamptz default now()
@@ -200,6 +203,9 @@ alter table public.raster_status_viagem add column if not exists data_hora_ult_p
 alter table public.raster_status_viagem add column if not exists latitude_ult_posicao numeric;
 alter table public.raster_status_viagem add column if not exists longitude_ult_posicao numeric;
 alter table public.raster_status_viagem add column if not exists ref_ult_posicao text;
+alter table public.raster_status_viagem add column if not exists documentos jsonb;
+alter table public.raster_status_viagem add column if not exists documentos_resumo text;
+alter table public.raster_status_viagem add column if not exists qtd_documentos integer default 0;
 alter table public.raster_status_viagem add column if not exists raw jsonb;
 alter table public.raster_status_viagem add column if not exists payload jsonb;
 alter table public.raster_status_viagem add column if not exists synced_at timestamptz default now();
@@ -207,6 +213,34 @@ alter table public.raster_status_viagem add column if not exists synced_at times
 create index if not exists idx_raster_status_viagem_placa on public.raster_status_viagem (placa_veiculo);
 create index if not exists idx_raster_status_viagem_status on public.raster_status_viagem (status_viagem);
 create index if not exists idx_raster_status_viagem_sync on public.raster_status_viagem (synced_at);
+
+-- Documentos vinculados ao getStatusViagem
+create table if not exists public.raster_status_viagem_documentos (
+  chave text primary key,
+  chave_status_viagem text,
+  cod_solicitacao bigint,
+  cod_pre_solicitacao bigint,
+  placa_veiculo text,
+  tipo text,
+  numero text,
+  origem text,
+  raw jsonb,
+  synced_at timestamptz default now()
+);
+
+alter table public.raster_status_viagem_documentos add column if not exists chave_status_viagem text;
+alter table public.raster_status_viagem_documentos add column if not exists cod_solicitacao bigint;
+alter table public.raster_status_viagem_documentos add column if not exists cod_pre_solicitacao bigint;
+alter table public.raster_status_viagem_documentos add column if not exists placa_veiculo text;
+alter table public.raster_status_viagem_documentos add column if not exists tipo text;
+alter table public.raster_status_viagem_documentos add column if not exists numero text;
+alter table public.raster_status_viagem_documentos add column if not exists origem text;
+alter table public.raster_status_viagem_documentos add column if not exists raw jsonb;
+alter table public.raster_status_viagem_documentos add column if not exists synced_at timestamptz default now();
+
+create index if not exists idx_raster_status_viagem_docs_placa on public.raster_status_viagem_documentos (placa_veiculo);
+create index if not exists idx_raster_status_viagem_docs_numero on public.raster_status_viagem_documentos (numero);
+create index if not exists idx_raster_status_viagem_docs_sync on public.raster_status_viagem_documentos (synced_at);
 
 -- ============================================================
 -- OMNILINK / WSTT
