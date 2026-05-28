@@ -109,8 +109,13 @@ def _extract_documentos_status_viagem(data: dict[str, Any]) -> list[dict[str, An
 
     def walk(obj: Any, origem: str = "") -> None:
         if isinstance(obj, dict):
+            # Se o próprio objeto já for documento, captura direto.
+            # Ex.: {"Tipo":"CTE", "Numero":"1234"} ou {"Tipo":"CARGA", "Numero":"4192"}
+            if any(k in obj for k in ("Tipo", "tipo", "TipoDocumento", "TipoDoc")) and any(k in obj for k in ("Numero", "Número", "numero", "NumDocumento", "Documento", "documento", "Chave")):
+                add_doc(obj, origem or "Documento")
+
             # Chaves diretas comuns no método getStatusViagem
-            for key in ("Documentos", "Documento", "Docs", "CTes", "Notas", "NFs"):
+            for key in ("Documentos", "Documento", "Docs", "CTes", "CTE", "Conhecimentos", "Conhecimento", "Cargas", "Carga", "Notas", "NFs"):
                 val = obj.get(key)
                 if isinstance(val, list):
                     for item in val:
@@ -129,14 +134,21 @@ def _extract_documentos_status_viagem(data: dict[str, Any]) -> list[dict[str, An
 
     walk(data)
 
-    # Remove duplicados por tipo+numero+origem mantendo o raw primeiro encontrado
+    # Remove duplicados por Tipo + Numero mantendo o raw primeiro encontrado.
+    # Tipo fica padronizado em maiúsculo: CTE, CARGA, SHIPMENT, OUTROS etc.
     unicos: list[dict[str, Any]] = []
-    vistos: set[tuple[str | None, str | None, str | None]] = set()
+    vistos: set[tuple[str | None, str | None]] = set()
     for d in encontrados:
-        chave = (d.get("tipo"), d.get("numero"), d.get("origem"))
+        tipo = str(d.get("tipo") or "").upper().strip() or None
+        numero = str(d.get("numero") or "").strip() or None
+        if not numero:
+            continue
+        chave = (tipo, numero)
         if chave in vistos:
             continue
         vistos.add(chave)
+        d["tipo"] = tipo
+        d["numero"] = numero
         unicos.append(d)
     return unicos
 
@@ -424,6 +436,47 @@ def _coletar_placas_raster_status(limite: int = 50) -> list[str]:
     return placas
 
 
+def _coletar_documentos_status_viagem(limite: int = 50) -> list[dict[str, Any]]:
+    """Coleta documentos já conhecidos para consultar getStatusViagem por Documentos.
+
+    Não cria nada na Raster. Usa somente documentos já retornados/salvos no Supabase.
+    Por padrão prioriza CTE e CARGA, porque são os documentos operacionais pedidos.
+    Para alterar: RASTER_STATUS_DOCUMENTOS_TIPOS="CTE,CARGA,SHIPMENT,OUTROS".
+    """
+    tipos_permitidos = {
+        t.strip().upper()
+        for t in str(_env("RASTER_STATUS_DOCUMENTOS_TIPOS", "CTE,CARGA") or "CTE,CARGA").split(",")
+        if t.strip()
+    }
+    fontes = [
+        ("raster_status_viagem_documentos", "tipo", "numero"),
+        ("raster_status_viagem_documentos", "tipo_documento", "numero_documento"),
+    ]
+    docs: list[dict[str, Any]] = []
+    vistos: set[tuple[str, str]] = set()
+
+    for tabela, col_tipo, col_numero in fontes:
+        try:
+            linhas = select_rows(tabela, f"{col_tipo},{col_numero}", limit=20000, order_by="synced_at")
+        except Exception:
+            continue
+        for row in linhas:
+            tipo = str(row.get(col_tipo) or "").upper().strip()
+            numero = str(row.get(col_numero) or "").strip()
+            if not tipo or not numero:
+                continue
+            if tipos_permitidos and tipo not in tipos_permitidos:
+                continue
+            chave = (tipo, numero)
+            if chave in vistos:
+                continue
+            vistos.add(chave)
+            docs.append({"Tipo": tipo, "Numero": numero})
+            if len(docs) >= limite:
+                return docs
+    return docs
+
+
 def _row_status_viagem(data: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
     placa = normalize_placa(data.get("PlacaVeiculo") or payload.get("Placa"))
     cod_solicitacao = to_int(data.get("CodSolicitacao") or payload.get("CodSolicitacao"))
@@ -489,34 +542,58 @@ def _rows_status_viagem_documentos(status_row: dict[str, Any]) -> list[dict[str,
     return rows
 
 def sync_status_viagem(limite: int | None = None) -> int:
-    """Consulta getStatusViagem automaticamente por placas já existentes.
+    """Consulta getStatusViagem automaticamente, sem preencher nada.
 
-    Não exige preenchimento manual. Usa placas de SM abertas, viagens, checklist e WSTT.
+    Não cria nada na Raster. Estratégia:
+    1) consulta por Placa usando placas já existentes;
+    2) consulta por Documentos já conhecidos, priorizando CTE e CARGA.
+
+    Payload por documento conforme o manual:
+    {"Documentos": [{"Tipo": "CTE", "Numero": "1234"}]}
     """
     rotina = "Status viagem"
     try:
         limite_real = limite or to_int(_env("RASTER_STATUS_VIAGEM_LIMITE", "50")) or 50
         limite_real = max(1, min(int(limite_real), 500))
+
         placas = _coletar_placas_raster_status(limite_real)
-        if not placas:
-            log_execucao(rotina, "sucesso", 0, "Nenhuma placa disponível para getStatusViagem.")
+        documentos = _coletar_documentos_status_viagem(limite_real)
+
+        if not placas and not documentos:
+            log_execucao(rotina, "sucesso", 0, "Nenhuma placa/documento disponível para getStatusViagem.")
             return 0
 
         delay = to_float(_env("RASTER_DELAY_STATUS_VIAGEM_SECONDS", "1")) or 1
         rows: list[dict[str, Any]] = []
         erros: list[str] = []
-        for idx, placa in enumerate(placas, start=1):
-            payload = {"Placa": placa}
+
+        consultas: list[dict[str, Any]] = []
+        for placa in placas:
+            consultas.append({"Placa": placa})
+        for doc in documentos:
+            consultas.append({"Documentos": [doc]})
+
+        consultas_unicas: list[dict[str, Any]] = []
+        vistos_payload: set[str] = set()
+        for payload in consultas:
+            chave_payload = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+            if chave_payload in vistos_payload:
+                continue
+            vistos_payload.add(chave_payload)
+            consultas_unicas.append(payload)
+
+        for idx, payload in enumerate(consultas_unicas, start=1):
+            label = payload.get("Placa") or payload.get("Documentos")
             try:
                 data = call_raster("getStatusViagem", payload)
                 if not _ok(data):
-                    erros.append(f"{placa}: {data.get('CodErro')} {data.get('MsgErro')}")
-                    # salva retorno de erro como raw para diagnóstico, mas tabela visual não mostra erro técnico
-                    data = {**data, "PlacaVeiculo": placa}
+                    erros.append(f"{label}: {data.get('CodErro')} {data.get('MsgErro')}")
+                    if payload.get("Placa"):
+                        data = {**data, "PlacaVeiculo": payload.get("Placa")}
                 rows.append(_row_status_viagem(data, payload))
             except Exception as exc:
-                erros.append(f"{placa}: {exc}")
-            if idx < len(placas) and delay > 0:
+                erros.append(f"{label}: {exc}")
+            if idx < len(consultas_unicas) and delay > 0:
                 time.sleep(delay)
 
         total = upsert_rows("raster_status_viagem", rows, "chave") if rows else 0
@@ -525,12 +602,15 @@ def sync_status_viagem(limite: int | None = None) -> int:
             doc_rows.extend(_rows_status_viagem_documentos(row))
         if doc_rows:
             upsert_rows("raster_status_viagem_documentos", doc_rows, "chave")
-        log_execucao(rotina, "sucesso" if not erros else "parcial", total, " | ".join(erros[:20]) if erros else None)
+
+        resumo = f"placas={len(placas)} docs_cte_carga={len(documentos)} consultas={len(consultas_unicas)}"
+        if erros:
+            resumo += " | " + " | ".join(erros[:20])
+        log_execucao(rotina, "sucesso" if not erros else "parcial", total, resumo)
         return total
     except Exception as exc:
         log_execucao(rotina, "erro", 0, str(exc))
         return 0
-
 
 
 def sync_historico_testes() -> int:
