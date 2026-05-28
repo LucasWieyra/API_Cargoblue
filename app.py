@@ -1,367 +1,318 @@
-import os
+import io
 import json
 import time
-from datetime import date, timedelta, datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+import zipfile
+from datetime import date
+from typing import Any, Dict, List
 
-import requests
+import pandas as pd
+import plotly.express as px
 import streamlit as st
-from dateutil import parser
+
+from api_raster_live import (
+    GET_TABELA_NOMES,
+    METHOD_REGISTRY,
+    RasterClient,
+    as_int,
+    extract_documents,
+    extract_values,
+    make_download_json,
+    period_previous_current_month,
+    records_from_response,
+)
+
+st.set_page_config(page_title="Raster API — GET e Consultas", page_icon="🔎", layout="wide")
+
+st.title("🔎 Raster API — Bases GET e Consultas")
+st.caption("Consulta direta na API Raster, sem Supabase, sem métodos de inclusão/alteração. Somente métodos GET/consulta do manual.")
 
 
-def cfg(name: str, default: str = "") -> str:
-    try:
-        if name in st.secrets:
-            return str(st.secrets[name]).strip().strip('"')
-    except Exception:
-        pass
-    return str(os.getenv(name, default) or default).strip().strip('"')
-
-
-def base_payload() -> Dict[str, Any]:
-    login = cfg("RASTER_LOGIN")
-    senha = cfg("RASTER_SENHA")
-    if not login or not senha:
-        raise RuntimeError("Configure RASTER_LOGIN e RASTER_SENHA nos Secrets do Streamlit.")
-    return {
-        "Ambiente": cfg("RASTER_AMBIENTE", "Producao") or "Producao",
-        "Login": login,
-        "Senha": senha,
-        "TipoRetorno": cfg("RASTER_TIPO_RETORNO", "JSON") or "JSON",
-    }
-
-
-def base_url() -> str:
-    return cfg("RASTER_BASE_URL", "https://integra.logae.com.br/datasnap/rest/TWebService").rstrip("/")
-
-
-def parse_date(value: Any) -> Optional[str]:
-    if value in (None, "", "null", "None"):
-        return None
-    try:
-        return parser.parse(str(value)).isoformat()
-    except Exception:
-        return str(value)
-
-
-def to_int(value: Any) -> Optional[int]:
-    if value in (None, "", "null", "None"):
-        return None
-    try:
-        return int(float(str(value).replace(",", ".")))
-    except Exception:
-        return None
-
-
-def pick(data: Dict[str, Any], *names: str) -> Any:
-    if not isinstance(data, dict):
-        return None
-    lower = {str(k).lower(): v for k, v in data.items()}
-    for name in names:
-        if name in data:
-            return data[name]
-        val = lower.get(name.lower())
-        if val is not None:
-            return val
-    return None
-
-
-def call_raster(method: str, body: Optional[Dict[str, Any]] = None, timeout: Optional[int] = None) -> Dict[str, Any]:
-    payload = base_payload()
-    if body:
-        payload.update({k: v for k, v in body.items() if v not in (None, "", [], {})})
-
-    timeout = timeout or int(cfg("RASTER_TIMEOUT_SECONDS", "25") or 25)
-    urls = [f'{base_url()}/"{method}"', f"{base_url()}/{method}"]
-    errors: List[Dict[str, Any]] = []
-
-    for url in urls:
+def secret_ok() -> bool:
+    required = ["RASTER_BASE_URL", "RASTER_LOGIN", "RASTER_SENHA"]
+    missing = []
+    for k in required:
         try:
-            r = requests.post(url, json=payload, timeout=timeout)
-            body_text = r.text[:2000]
-            if r.status_code >= 400:
-                errors.append({"url": url, "status": r.status_code, "body": body_text})
-                continue
-            data = r.json()
-            if isinstance(data, dict) and isinstance(data.get("result"), list) and data["result"]:
-                result = data["result"][0]
-                if isinstance(result, dict):
-                    result["_payload_enviado"] = payload
-                    result["_url_usada"] = url
-                    return result
-                return {"retorno": result, "_payload_enviado": payload, "_url_usada": url}
-            if isinstance(data, dict):
-                data["_payload_enviado"] = payload
-                data["_url_usada"] = url
-                return data
-            return {"retorno": data, "_payload_enviado": payload, "_url_usada": url}
-        except Exception as exc:
-            errors.append({"url": url, "erro": str(exc)})
-
-    return {
-        "CodErro": "HTTP_ERROR",
-        "MsgErro": f"Erro ao chamar Raster {method}",
-        "tentativas_http": errors,
-        "_payload_enviado": payload,
-    }
+            if not st.secrets.get(k):
+                missing.append(k)
+        except Exception:
+            import os
+            if not os.getenv(k):
+                missing.append(k)
+    if missing:
+        st.error("Configure os Secrets antes de rodar: " + ", ".join(missing))
+        return False
+    return True
 
 
-def ok(data: Dict[str, Any]) -> bool:
-    code = str(data.get("CodErro", "0")).strip()
-    return code in ("0", "", "None", "none")
+if "results" not in st.session_state:
+    st.session_state.results = {}
+if "logs" not in st.session_state:
+    st.session_state.logs = []
 
 
-def previous_and_current_month() -> Tuple[str, str]:
-    today = date.today()
-    first_current = today.replace(day=1)
-    last_prev = first_current - timedelta(days=1)
-    first_prev = last_prev.replace(day=1)
-    return first_prev.isoformat(), today.isoformat()
+def log(msg: str, status: str = "INFO"):
+    line = f"[{status}] {msg}"
+    st.session_state.logs.insert(0, line)
 
 
-def find_list(data: Dict[str, Any], preferred: Tuple[str, ...]) -> List[Dict[str, Any]]:
-    for key in preferred:
-        v = data.get(key)
-        if isinstance(v, list):
-            return [x for x in v if isinstance(x, dict)]
-        if isinstance(v, dict):
-            for sub in v.values():
-                if isinstance(sub, list):
-                    return [x for x in sub if isinstance(x, dict)]
-    for v in data.values():
-        if isinstance(v, list) and (not v or isinstance(v[0], dict)):
-            return [x for x in v if isinstance(x, dict)]
-    return []
-
-
-def normalize_doc_type(t: Any) -> Optional[str]:
-    if t in (None, ""):
-        return None
-    txt = str(t).upper().strip().replace(" ", "")
-    aliases = {
-        "CT-E": "CTE",
-        "CTE": "CTE",
-        "CARGA": "CARGA",
-        "LOADNUMBER": "CARGA",
-        "LOAD_NUMBER": "CARGA",
-        "SHIPMENT": "SHIPMENT",
-    }
-    return aliases.get(txt, txt)
-
-
-def extract_documents(obj: Any) -> List[Dict[str, Any]]:
-    docs: List[Dict[str, Any]] = []
-
-    def add(doc: Any, origem: str = ""):
-        if not isinstance(doc, dict):
-            return
-        tipo = normalize_doc_type(pick(doc, "Tipo", "tipo", "TipoDocumento", "TipoDoc"))
-        numero = pick(doc, "Numero", "Número", "numero", "NumDocumento", "Documento", "documento", "Chave")
-        if numero in (None, ""):
-            return
-        docs.append({
-            "tipo_documento": tipo,
-            "numero_documento": str(numero).strip(),
-            "valor_documento": pick(doc, "Valor", "valor"),
-            "peso": pick(doc, "Peso", "peso"),
-            "origem_documento": origem or None,
-            "raw_documento": doc,
-        })
-
-    def walk(x: Any, origem: str = ""):
-        if isinstance(x, dict):
-            if any(k in x for k in ("Tipo", "tipo", "TipoDocumento", "TipoDoc")) and any(k in x for k in ("Numero", "Número", "numero", "Documento", "documento", "Chave")):
-                add(x, origem or "Documento")
-            for key, val in x.items():
-                if key.lower() in ("raw", "payload", "tentativas_http"):
-                    continue
-                if isinstance(val, list):
-                    if key.lower() in ("documentos", "documento", "docs", "cargas", "carga", "ctes", "cte", "conhecimentos", "notas"):
-                        for item in val:
-                            add(item, key)
-                    for item in val:
-                        walk(item, key)
-                elif isinstance(val, dict):
-                    if key.lower() in ("documentos", "documento", "carga", "cte", "conhecimento"):
-                        add(val, key)
-                    walk(val, key)
-        elif isinstance(x, list):
-            for item in x:
-                walk(item, origem)
-
-    walk(obj)
-
-    seen = set()
-    unique = []
-    for d in docs:
-        key = (d.get("tipo_documento"), d.get("numero_documento"))
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(d)
-    return unique
-
-
-def preferred_docs(docs: List[Dict[str, Any]], only_operational: bool = True) -> List[Dict[str, Any]]:
-    allowed = {"CARGA", "CTE"} if only_operational else {"CARGA", "CTE", "SHIPMENT", "OUTROS"}
-    filtered = [d for d in docs if d.get("tipo_documento") in allowed]
-    priority = {"CARGA": 1, "CTE": 2, "SHIPMENT": 3, "OUTROS": 4}
-    return sorted(filtered, key=lambda d: (priority.get(d.get("tipo_documento"), 9), str(d.get("numero_documento"))))
-
-
-def get_evento_fim_viagem(data_inicial: Optional[str] = None, data_final: Optional[str] = None, status: str = "T") -> Dict[str, Any]:
-    if not data_inicial or not data_final:
-        data_inicial, data_final = previous_and_current_month()
-    return call_raster("getEventoFimViagem", {
-        "DataInicial": data_inicial,
-        "DataFinal": data_final,
-        "StatusViagem": status or "T",
-    })
-
-
-def rows_sm_documentos(data: Dict[str, Any], only_operational: bool = True) -> List[Dict[str, Any]]:
-    viagens = find_list(data, ("Viagens", "Viagem", "Dados"))
-    rows: List[Dict[str, Any]] = []
-    for viagem in viagens:
-        docs = preferred_docs(extract_documents(viagem), only_operational=only_operational)
-        for doc in docs:
-            rows.append({
-                "sm": pick(viagem, "CodSolicitacao", "cod_solicitacao"),
-                "cod_pre_solicitacao": pick(viagem, "CodPreSolicitacao", "cod_pre_solicitacao"),
-                "tipo_documento": doc.get("tipo_documento"),
-                "numero_documento": doc.get("numero_documento"),
-                "documento_prioridade": 1 if doc.get("tipo_documento") == "CARGA" else 2,
-                "placa_veiculo_api": pick(viagem, "PlacaVeiculo", "Placa", "placa"),
-                "status_viagem": pick(viagem, "StatusViagem"),
-                "status_checklist_viagem": pick(viagem, "StatusChecklist"),
-                "data_prev_inicio": parse_date(pick(viagem, "DataHoraPrevIni", "DataPrevInicio")),
-                "data_prev_fim": parse_date(pick(viagem, "DataHoraPrevFim", "DataPrevFim")),
-                "data_real_inicio": parse_date(pick(viagem, "DataHoraRealIni", "DataRealInicio")),
-                "data_real_fim": parse_date(pick(viagem, "DataHoraRealFim", "DataRealFim")),
-                "origem": "getEventoFimViagem",
-            })
-    return rows
-
-
-def get_status_viagem_by_document(tipo: str, numero: str) -> Dict[str, Any]:
-    return call_raster("getStatusViagem", {"Documentos": [{"Tipo": tipo, "Numero": numero}]})
-
-
-def rows_status_by_documents(sm_doc_rows: List[Dict[str, Any]], limit: int = 25) -> List[Dict[str, Any]]:
-    rows = []
-    seen = set()
-    delay = float(cfg("RASTER_DELAY_STATUS_VIAGEM_SECONDS", "1") or 1)
-    for r in sm_doc_rows[:limit]:
-        tipo = r.get("tipo_documento")
-        numero = r.get("numero_documento")
-        if not tipo or not numero:
-            continue
-        key = (tipo, numero)
-        if key in seen:
-            continue
-        seen.add(key)
-        data = get_status_viagem_by_document(tipo, numero)
-        status_rows = find_list(data, ("Viagens", "Viagem", "StatusViagem", "Dados")) or ([data] if isinstance(data, dict) else [])
-        for item in status_rows:
-            rows.append({
-                "tipo_documento": tipo,
-                "numero_documento": numero,
-                "sm": pick(item, "CodSolicitacao", "cod_solicitacao") or r.get("sm"),
-                "cod_pre_solicitacao": pick(item, "CodPreSolicitacao", "cod_pre_solicitacao") or r.get("cod_pre_solicitacao"),
-                "placa_veiculo_api": pick(item, "PlacaVeiculo", "Placa", "placa") or r.get("placa_veiculo_api"),
-                "status_viagem": pick(item, "StatusViagem") or r.get("status_viagem"),
-                "status_checklist_viagem": pick(item, "StatusChecklist") or r.get("status_checklist_viagem"),
-                "cod_erro": data.get("CodErro"),
-                "msg_erro": data.get("MsgErro"),
-                "origem": "getStatusViagem(Documentos)",
-            })
-        if delay:
-            time.sleep(delay)
-    return rows
-
-
-def get_historico_testes(veiculo: str) -> Dict[str, Any]:
-    return call_raster("getHistoricoTestes", {"Veiculo": veiculo})
-
-
-def get_resultado_checklist(cod_checklist: Optional[int] = None, veiculo: Optional[str] = None) -> Dict[str, Any]:
-    body: Dict[str, Any] = {
-        "CodFilial": to_int(cfg("RASTER_COD_FILIAL", "6278")),
-        "CodPerfilSeguranca": to_int(cfg("RASTER_COD_PERFIL_SEGURANCA", "14341")),
-    }
-    produtos = cfg("RASTER_PRODUTOS", '[{"CodProduto":2134,"Valor":1}]')
-    try:
-        body["Produtos"] = json.loads(produtos)
-    except Exception:
-        body["Produtos"] = [{"CodProduto": 2134, "Valor": 1}]
-    if cod_checklist:
-        body["CodCheckList"] = cod_checklist
-    elif veiculo:
-        body["Veiculo"] = veiculo
+def call_method(client: RasterClient, method: str, payload: Dict[str, Any], key: str | None = None, delay: float = 0.0) -> Dict[str, Any]:
+    if delay > 0:
+        time.sleep(delay)
+    data = client.post(method, payload)
+    store_key = key or method
+    st.session_state.results[store_key] = data
+    cod_erro = str(data.get("CodErro", "0"))
+    if cod_erro not in ("0", "", "None"):
+        log(f"{method}: erro {data.get('CodErro')} - {data.get('MsgErro')}", "ERRO")
     else:
-        raise RuntimeError("Informe CodCheckList ou Veiculo para consultar resultado de checklist.")
-    return call_raster("getGerarResultadoCheckList", body)
+        log(f"{method}: consulta finalizada", "OK")
+    return data
 
 
-def checklist_rows_by_documents(status_rows: List[Dict[str, Any]], limit_docs: int = 10, limit_checklists_per_doc: int = 3) -> List[Dict[str, Any]]:
-    """Busca checklist via API partindo do documento.
+def show_response(title: str, data: Dict[str, Any]):
+    st.subheader(title)
+    cod_erro = str(data.get("CodErro", "0"))
+    if cod_erro not in ("0", "", "None"):
+        st.warning(f"Raster retornou: {data.get('CodErro')} — {data.get('MsgErro')}")
+    records = records_from_response(data)
+    df = pd.DataFrame(records)
+    if not df.empty:
+        st.dataframe(df, use_container_width=True, height=360)
+        csv = df.to_csv(index=False).encode("utf-8-sig")
+        st.download_button("Baixar CSV", csv, file_name=f"{title.replace(' ', '_')}.csv", mime="text/csv", key=f"csv_{title}")
+    with st.expander("Ver JSON bruto"):
+        st.json(data)
 
-    Observação: a Raster não possui método de checklist por CARGA/CTE. Por isso o fluxo é:
-    CARGA/CTE -> getStatusViagem(Documentos) -> viagem/veículo -> getHistoricoTestes/getGerarResultadoCheckList.
-    A saída fica vinculada ao documento e à SM, não a uma tabela do Supabase.
-    """
-    rows: List[Dict[str, Any]] = []
-    seen_docs = set()
-    delay = float(cfg("RASTER_DELAY_CHECKLIST_SECONDS", "12") or 12)
 
-    for s in status_rows:
-        doc_key = (s.get("tipo_documento"), s.get("numero_documento"))
-        if doc_key in seen_docs:
-            continue
-        seen_docs.add(doc_key)
-        if len(seen_docs) > limit_docs:
-            break
+def build_zip(results: Dict[str, Any]) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("raster_resultados_completos.json", make_download_json(results))
+        for name, data in results.items():
+            safe = "".join(c if c.isalnum() or c in "_-" else "_" for c in name)[:80]
+            z.writestr(f"json/{safe}.json", make_download_json(data))
+            try:
+                df = pd.DataFrame(records_from_response(data))
+                if not df.empty:
+                    z.writestr(f"csv/{safe}.csv", df.to_csv(index=False))
+            except Exception:
+                pass
+    return buf.getvalue()
 
-        veiculo = s.get("placa_veiculo_api")
-        if not veiculo:
-            rows.append({**s, "cod_checklist": None, "status_checklist": None, "observacao": "API não retornou veículo para consultar histórico de checklist"})
-            continue
 
-        hist = get_historico_testes(str(veiculo).replace("-", ""))
-        testes = find_list(hist, ("Testes", "Historico", "HistoricoTestes", "CheckLists", "CheckList", "Dados"))
-        if not testes and ok(hist):
-            testes = [hist]
-        count = 0
-        for teste in testes:
-            cod = to_int(pick(teste, "CodCheckList", "CodChecklist", "cod_checklist", "Codigo", "Cod"))
-            if not cod:
-                continue
-            result = get_resultado_checklist(cod_checklist=cod)
-            rec = result
-            status = pick(rec, "Status", "status")
-            resultado = pick(rec, "Resultado", "resultado")
-            rows.append({
-                "sm": s.get("sm"),
-                "cod_pre_solicitacao": s.get("cod_pre_solicitacao"),
-                "tipo_documento": s.get("tipo_documento"),
-                "numero_documento": s.get("numero_documento"),
-                "placa_veiculo_api": veiculo,
-                "cod_checklist": cod,
-                "status_checklist": status,
-                "resultado": resultado,
-                "apto": True if str(resultado).upper() in ("A", "APTO", "APROVADO") else False if str(resultado).upper() in ("R", "REPROVADO") else None,
-                "data_geracao": parse_date(pick(rec, "DataGeracao", "data_geracao")),
-                "data_expiracao": parse_date(pick(rec, "DataExpiracao", "data_expiracao")),
-                "url_documento": pick(rec, "UrlDocumento", "URLDocumento", "url_documento"),
-                "cod_erro": result.get("CodErro"),
-                "msg_erro": result.get("MsgErro"),
-                "origem": "Documento -> getStatusViagem -> getHistoricoTestes -> getGerarResultadoCheckList",
-            })
-            count += 1
-            if delay:
-                time.sleep(delay)
-            if count >= limit_checklists_per_doc:
-                break
-        if count == 0:
-            rows.append({**s, "cod_checklist": None, "status_checklist": None, "observacao": "Nenhum CodCheckList encontrado no histórico retornado pela API"})
-    return rows
+with st.sidebar:
+    st.header("Configuração")
+    if secret_ok():
+        st.success("Secrets carregados")
+    st.divider()
+    data_ini_default, data_fim_default = period_previous_current_month()
+    data_inicial = st.date_input("Data inicial", value=date.fromisoformat(data_ini_default))
+    data_final = st.date_input("Data final", value=date.fromisoformat(data_fim_default))
+    status_viagem = st.selectbox("Status viagem", ["T", "F", "A", "AB"], index=0, help="T=todas, F=finalizadas, A=andamento, AB=efetivada em aberto")
+    limite_auto = st.number_input("Limite de encadeamento", min_value=1, max_value=500, value=50, step=1)
+    delay_curto = st.number_input("Delay curto entre chamadas", min_value=0.0, max_value=30.0, value=1.0, step=0.5)
+    delay_checklist = st.number_input("Delay checklist", min_value=0.0, max_value=60.0, value=12.0, step=1.0)
+
+client = RasterClient()
+
+abas = st.tabs([
+    "🚀 Pacote automático",
+    "📚 getTabela / Cadastros",
+    "🚚 Viagens e documentos",
+    "✅ Checklist",
+    "🧪 Explorador manual",
+    "📦 Resultados",
+    "🖥️ Terminal",
+])
+
+with abas[0]:
+    st.header("Pacote automático de bases GET/consulta")
+    st.info("Roda somente consultas. Não chama setPreSM, setIncluirCheckList, setProgramacaoCargas ou qualquer método de inclusão/alteração.")
+    col1, col2, col3 = st.columns(3)
+    run_tabelas = col1.checkbox("getTabela — cadastros", value=True)
+    run_viagens = col1.checkbox("getEventoFimViagem — período", value=True)
+    run_status_docs = col2.checkbox("getStatusViagem por CARGA/CTE", value=True)
+    run_posicoes = col2.checkbox("getPosicoes últimas", value=False)
+    run_checklist = col3.checkbox("Checklist existente", value=False)
+    run_km = col3.checkbox("getKMRodado", value=False)
+
+    if st.button("▶️ Rodar pacote automático", type="primary", use_container_width=True):
+        st.session_state.results = {}
+        st.session_state.logs = []
+        progress = st.progress(0)
+        step = 0
+        total_steps = (len(GET_TABELA_NOMES) if run_tabelas else 0) + 6
+
+        if run_tabelas:
+            for nome in GET_TABELA_NOMES:
+                call_method(client, "getTabela", {"NomeTabela": nome}, key=f"getTabela_{nome}", delay=delay_curto)
+                step += 1
+                progress.progress(min(step / total_steps, 1.0))
+
+        evento_data = {}
+        docs: List[Dict[str, Any]] = []
+        placas = []
+        cod_solicitacoes = []
+        cod_pre = []
+
+        if run_viagens:
+            evento_payload = {
+                "DataInicial": data_inicial.isoformat(),
+                "DataFinal": data_final.isoformat(),
+                "StatusViagem": status_viagem,
+            }
+            evento_data = call_method(client, "getEventoFimViagem", evento_payload, key="getEventoFimViagem_periodo", delay=delay_curto)
+            docs = extract_documents(evento_data)
+            docs = [d for d in docs if d["Tipo"] in ("CARGA", "CTE", "CT-E", "SHIPMENT")][: int(limite_auto)]
+            placas = extract_values(evento_data, ["Placa", "PlacaVeiculo", "Veiculo"])
+            cod_solicitacoes = extract_values(evento_data, ["CodSolicitacao"])
+            cod_pre = extract_values(evento_data, ["CodPreSolicitacao"])
+            step += 1
+            progress.progress(min(step / total_steps, 1.0))
+
+        if run_status_docs and docs:
+            for i, doc in enumerate(docs[: int(limite_auto)], start=1):
+                call_method(client, "getStatusViagem", {"Documentos": [doc]}, key=f"getStatusViagem_{doc['Tipo']}_{doc['Numero']}", delay=delay_curto)
+                step += 1
+                progress.progress(min(step / max(total_steps + len(docs), 1), 1.0))
+        elif run_status_docs:
+            st.warning("Nenhum documento CARGA/CTE/SHIPMENT encontrado no getEventoFimViagem para encadear getStatusViagem.")
+
+        if run_posicoes:
+            call_method(client, "getPosicoes", {"TipoConsulta": "Ultimas", "CodUltPosicao": 0}, key="getPosicoes_ultimas", delay=delay_curto)
+
+        if run_km:
+            for placa in placas[: int(limite_auto)]:
+                call_method(client, "getKMRodado", {"DataInicial": data_inicial.isoformat(), "DataFinal": data_final.isoformat(), "Placa": placa}, key=f"getKMRodado_{placa}", delay=delay_curto)
+
+        if run_checklist:
+            cod_filial = st.secrets.get("RASTER_COD_FILIAL", "") if hasattr(st, "secrets") else ""
+            cod_perfil = st.secrets.get("RASTER_COD_PERFIL_SEGURANCA", "") if hasattr(st, "secrets") else ""
+            produtos_raw = st.secrets.get("RASTER_PRODUTOS", "[]") if hasattr(st, "secrets") else "[]"
+            try:
+                produtos = json.loads(produtos_raw) if isinstance(produtos_raw, str) else produtos_raw
+            except Exception:
+                produtos = []
+            # Usa histórico por veículo apenas para descobrir CodCheckList existente. Não cria nada.
+            for placa in placas[: int(limite_auto)]:
+                hist = call_method(client, "getHistoricoTestes", {"Veiculo": placa}, key=f"getHistoricoTestes_{placa}", delay=delay_curto)
+                cods = extract_values(hist, ["CodCheckList", "CodChecklist", "cod_checklist"])
+                for cod in cods[:3]:
+                    payload = {"CodCheckList": cod, "CodFilial": cod_filial, "CodPerfilSeguranca": cod_perfil, "Produtos": produtos}
+                    call_method(client, "getGerarResultadoCheckList", payload, key=f"getGerarResultadoCheckList_{cod}", delay=delay_checklist)
+
+        progress.progress(1.0)
+        st.success("Pacote automático finalizado.")
+
+with abas[1]:
+    st.header("📚 getTabela — cadastros/base de apoio")
+    st.write("Consulta as tabelas de apoio do manual: filiais, perfil de segurança, produtos, erros, cidades, tecnologias etc.")
+    selecionadas = st.multiselect("Tabelas", GET_TABELA_NOMES, default=["FILIAIS", "PERFIL_SEGURANCA", "PRODUTOS", "ERROS_WEBSERVICE"])
+    if st.button("Consultar tabelas selecionadas", use_container_width=True):
+        for nome in selecionadas:
+            call_method(client, "getTabela", {"NomeTabela": nome}, key=f"getTabela_{nome}", delay=delay_curto)
+    for nome in selecionadas:
+        key = f"getTabela_{nome}"
+        if key in st.session_state.results:
+            show_response(key, st.session_state.results[key])
+
+with abas[2]:
+    st.header("🚚 Viagens, SM e documentos")
+    st.write("Busca viagem/SM por período e também permite consultar por documentos CARGA, CTE, CT-E, SHIPMENT ou OUTROS.")
+    c1, c2, c3 = st.columns(3)
+    dt_ini = c1.date_input("Data inicial viagem", value=data_inicial, key="viagem_ini")
+    dt_fim = c2.date_input("Data final viagem", value=data_final, key="viagem_fim")
+    stv = c3.selectbox("Status", ["T", "F", "A", "AB"], index=0, key="viagem_status")
+    if st.button("Consultar getEventoFimViagem", use_container_width=True):
+        call_method(client, "getEventoFimViagem", {"DataInicial": dt_ini.isoformat(), "DataFinal": dt_fim.isoformat(), "StatusViagem": stv}, key="getEventoFimViagem_manual")
+    if "getEventoFimViagem_manual" in st.session_state.results:
+        data = st.session_state.results["getEventoFimViagem_manual"]
+        show_response("getEventoFimViagem_manual", data)
+        docs = extract_documents(data)
+        if docs:
+            st.subheader("Documentos encontrados")
+            dfd = pd.DataFrame(docs)
+            st.dataframe(dfd, use_container_width=True, height=260)
+            if st.button("Consultar getStatusViagem para documentos encontrados", use_container_width=True):
+                for doc in docs[: int(limite_auto)]:
+                    call_method(client, "getStatusViagem", {"Documentos": [doc]}, key=f"getStatusViagem_{doc['Tipo']}_{doc['Numero']}", delay=delay_curto)
+
+    st.divider()
+    st.subheader("Consulta direta por documento")
+    c1, c2 = st.columns(2)
+    tipo_doc = c1.selectbox("Tipo", ["CARGA", "CTE", "CT-E", "SHIPMENT", "OUTROS"])
+    numero_doc = c2.text_input("Número do documento")
+    if st.button("Consultar getStatusViagem por documento", use_container_width=True):
+        if numero_doc.strip():
+            doc = {"Tipo": tipo_doc, "Numero": numero_doc.strip()}
+            call_method(client, "getStatusViagem", {"Documentos": [doc]}, key=f"getStatusViagem_{tipo_doc}_{numero_doc.strip()}")
+        else:
+            st.warning("Informe o número do documento.")
+
+with abas[3]:
+    st.header("✅ Checklist existente")
+    st.warning("Não cria checklist. Usa apenas getHistoricoTestes e getGerarResultadoCheckList para consultar o que já existe.")
+    c1, c2, c3 = st.columns(3)
+    veiculo = c1.text_input("Veículo/placa para histórico")
+    cod_checklist = c2.text_input("CodCheckList para resultado")
+    cod_filial = c3.text_input("CodFilial", value=str(st.secrets.get("RASTER_COD_FILIAL", "") if hasattr(st, "secrets") else ""))
+    c4, c5 = st.columns(2)
+    cod_perfil = c4.text_input("CodPerfilSeguranca", value=str(st.secrets.get("RASTER_COD_PERFIL_SEGURANCA", "") if hasattr(st, "secrets") else ""))
+    produtos_raw = c5.text_area("Produtos JSON", value=str(st.secrets.get("RASTER_PRODUTOS", '[{"CodProduto":2134,"Valor":1}]') if hasattr(st, "secrets") else '[{"CodProduto":2134,"Valor":1}]'), height=90)
+    if st.button("Consultar histórico de testes", use_container_width=True):
+        if veiculo.strip():
+            call_method(client, "getHistoricoTestes", {"Veiculo": veiculo.strip()}, key=f"getHistoricoTestes_{veiculo.strip()}")
+        else:
+            st.warning("Informe um veículo/placa.")
+    if st.button("Consultar resultado oficial do checklist", use_container_width=True):
+        try:
+            produtos = json.loads(produtos_raw) if produtos_raw.strip() else []
+        except Exception as exc:
+            st.error(f"Produtos JSON inválido: {exc}")
+            produtos = []
+        payload = {"CodCheckList": cod_checklist.strip(), "CodFilial": cod_filial.strip(), "CodPerfilSeguranca": cod_perfil.strip(), "Produtos": produtos}
+        if cod_checklist.strip():
+            call_method(client, "getGerarResultadoCheckList", payload, key=f"getGerarResultadoCheckList_{cod_checklist.strip()}")
+        else:
+            st.warning("Informe o CodCheckList.")
+
+with abas[4]:
+    st.header("🧪 Explorador manual de métodos GET/consulta")
+    st.write("Use para qualquer método de consulta listado no manual. Não há métodos set* nesta tela.")
+    grupos = sorted(set(v["grupo"] for v in METHOD_REGISTRY.values()))
+    grupo = st.selectbox("Grupo", grupos)
+    metodos = [m for m, cfg in METHOD_REGISTRY.items() if cfg["grupo"] == grupo]
+    metodo = st.selectbox("Método", metodos)
+    default_payload = METHOD_REGISTRY[metodo].get("auto_payload", {})
+    payload_text = st.text_area("Payload adicional JSON", value=json.dumps(default_payload, ensure_ascii=False, indent=2), height=220)
+    if st.button("Executar método", use_container_width=True):
+        try:
+            payload = json.loads(payload_text) if payload_text.strip() else {}
+            if not isinstance(payload, dict):
+                st.error("O payload precisa ser um objeto JSON.")
+            else:
+                call_method(client, metodo, payload, key=f"manual_{metodo}_{len(st.session_state.results)}")
+        except Exception as exc:
+            st.error(f"JSON inválido: {exc}")
+
+with abas[5]:
+    st.header("📦 Resultados em memória")
+    st.caption("Esses dados não são salvos no Supabase. Ficam apenas na sessão do Streamlit e podem ser baixados.")
+    if st.session_state.results:
+        st.download_button("Baixar ZIP com JSON/CSV", build_zip(st.session_state.results), file_name="raster_get_consultas_resultados.zip", mime="application/zip", use_container_width=True)
+        selected = st.selectbox("Resultado", list(st.session_state.results.keys()))
+        show_response(selected, st.session_state.results[selected])
+    else:
+        st.info("Nenhum resultado ainda.")
+
+with abas[6]:
+    st.header("🖥️ Terminal")
+    if st.session_state.logs:
+        st.code("\n".join(st.session_state.logs[:200]))
+    else:
+        st.info("Sem logs ainda.")
+    if st.session_state.results:
+        with st.expander("Últimas tentativas HTTP"):
+            for k, data in list(st.session_state.results.items())[-5:]:
+                st.write(k)
+                st.json(data.get("_tentativas_http", []))
