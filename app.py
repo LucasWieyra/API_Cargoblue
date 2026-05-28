@@ -59,248 +59,156 @@ st.set_page_config(
     page_title="Central Raster + Omnilink",
     page_icon="🚚",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 CSS = """
 <style>
 /* =========================================================
-   UI SYSTEM — Minimalista estilo SAP/Fiori CRM
-   Mantém o tema do Streamlit (dark/light), sem travar fundo.
+   SAP/Fiori CRM inspired shell - clean enterprise UI
    ========================================================= */
 :root {
   --sap-blue: #0a6ed1;
-  --sap-blue-2: #0b74de;
-  --sap-green: #107e3e;
-  --sap-orange: #df6e0c;
-  --sap-red: #bb0000;
-  --sap-border: rgba(128, 128, 128, .20);
-  --sap-border-strong: rgba(128, 128, 128, .34);
-  --sap-surface: rgba(127, 127, 127, .055);
-  --sap-surface-2: rgba(127, 127, 127, .095);
-  --sap-shadow: 0 8px 22px rgba(0, 0, 0, .10);
-  --sap-radius: 12px;
+  --sap-blue-2: #0854a0;
+  --sap-bg: #f7f8fa;
+  --sap-shell: #354a5f;
+  --sap-card: #ffffff;
+  --sap-border: #d9dfe6;
+  --sap-text: #1d2d3e;
+  --sap-muted: #6a7785;
+  --sap-good: #107e3e;
+  --sap-warn: #df6e0c;
+  --sap-bad: #bb0000;
+  --sap-radius: 8px;
+  --sap-shadow: 0 1px 3px rgba(34,54,73,.10);
 }
 
+/* Oculta elementos nativos que ocupam espaço no topo/rodapé */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header[data-testid="stHeader"] {height: 0px; visibility: hidden;}
+[data-testid="stToolbar"] {display: none !important;}
+[data-testid="stDecoration"] {display: none !important;}
+[data-testid="stStatusWidget"] {display: none !important;}
+
+.stApp { background: var(--sap-bg); }
 .block-container {
-  max-width: 1540px;
-  padding-top: 1.05rem;
-  padding-bottom: 2.25rem;
+  max-width: 100% !important;
+  padding: .45rem 1.25rem 2rem 1.25rem !important;
 }
 
-/* Sidebar mais corporativa */
-[data-testid="stSidebar"] {
-  border-right: 1px solid var(--sap-border);
+/* Shell superior */
+.sap-shell {
+  background: linear-gradient(90deg, #24384d 0%, #354a5f 58%, #2b3e52 100%);
+  color: #fff;
+  border-radius: 0 0 12px 12px;
+  padding: 16px 20px 18px 20px;
+  margin: -8px -10px 14px -10px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.18);
 }
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
-[data-testid="stSidebar"] label {
-  font-size: .88rem;
+.sap-shell-top {display:flex; align-items:center; justify-content:space-between; gap: 16px;}
+.sap-brand {display:flex; align-items:center; gap: 12px;}
+.sap-logo {
+  width: 42px; height: 42px; border-radius: 8px;
+  background: #0a6ed1; display:flex; align-items:center; justify-content:center;
+  font-size: 24px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25);
 }
-[data-testid="stSidebar"] .stRadio > div {
-  gap: 4px;
+.sap-title {font-size: 22px; line-height: 1.1; font-weight: 700; letter-spacing: -.02em;}
+.sap-subtitle {font-size: 12px; opacity: .82; margin-top: 4px;}
+.sap-status {display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;}
+.sap-pill {
+  border: 1px solid rgba(255,255,255,.26); background: rgba(255,255,255,.10);
+  color: #fff; border-radius: 999px; padding: 5px 10px; font-size: 12px;
 }
-[data-testid="stSidebar"] .stRadio label {
-  border-radius: 10px;
-  padding: 4px 8px;
-}
+.sap-pill.good {background: rgba(16,126,62,.35); border-color: rgba(138,219,161,.45)}
+.sap-pill.warn {background: rgba(223,110,12,.35); border-color: rgba(255,190,120,.45)}
 
-/* Tipografia */
-h1, h2, h3 {
-  letter-spacing: -0.025em;
-}
-h1 { font-weight: 760; }
-h2 { font-weight: 720; }
-h3 { font-weight: 680; }
-
-/* Header Fiori */
-.hero {
-  border: 1px solid var(--sap-border);
-  border-radius: 18px;
-  padding: 18px 20px;
-  margin-bottom: 16px;
-  background: linear-gradient(135deg, rgba(10,110,209,.12), rgba(127,127,127,.035) 58%, rgba(16,126,62,.055));
+/* Navbar horizontal */
+div[role="radiogroup"] {gap: 6px !important;}
+div[role="radiogroup"] label {
+  border: 1px solid var(--sap-border) !important;
+  border-radius: 8px !important;
+  padding: 7px 12px !important;
+  background: var(--sap-card) !important;
   box-shadow: var(--sap-shadow);
-}
-.hero-grid {
-  display: grid;
-  grid-template-columns: 76px 1fr;
-  align-items: center;
-  gap: 16px;
-}
-.logo-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 68px;
-  height: 68px;
-  border-radius: 16px;
-  border: 1px solid rgba(10,110,209,.28);
-  background: rgba(10,110,209,.10);
-  font-size: 34px;
-}
-.hero-title {
-  font-size: 31px;
-  line-height: 1.08;
-  font-weight: 780;
-  letter-spacing: -0.035em;
-  margin-bottom: 4px;
-}
-.hero-subtitle, .hero-caption, .section-desc, .small-muted, .kpi-help, .kpi-label {
-  opacity: .72;
-}
-.hero-subtitle {
-  margin: 0 0 8px 0;
-  font-size: .98rem;
-}
-.hero-caption {
-  margin: 8px 0 0 0;
-  font-size: .82rem;
-}
-
-/* Badges status */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 9px;
-  border-radius: 999px;
-  margin: 4px 6px 4px 0;
-  font-size: .75rem;
-  font-weight: 650;
-  border: 1px solid var(--sap-border);
-  background: var(--sap-surface);
-}
-.badge.ok { color: #2e9f5f; border-color: rgba(46,159,95,.35); background: rgba(46,159,95,.10); }
-.badge.info { color: #0a6ed1; border-color: rgba(10,110,209,.35); background: rgba(10,110,209,.10); }
-.badge.warn { color: #df6e0c; border-color: rgba(223,110,12,.35); background: rgba(223,110,12,.10); }
-.badge.error { color: #bb0000; border-color: rgba(187,0,0,.35); background: rgba(187,0,0,.10); }
-
-/* Painéis e cards */
-.kpi-card, .panel, .sync-card, .metric-tile, .info-box, .warn-box, .auto-box, .terminal-box {
-  border: 1px solid var(--sap-border);
-  border-radius: var(--sap-radius);
-  background: var(--sap-surface);
-  box-shadow: 0 2px 8px rgba(0,0,0,.045);
-}
-.kpi-card, .panel, .sync-card, .metric-tile {
-  padding: 14px 15px;
-  margin-bottom: 10px;
-}
-.kpi-card:hover, .panel:hover, .sync-card:hover, .metric-tile:hover {
-  border-color: rgba(10,110,209,.34);
-  background: var(--sap-surface-2);
-}
-.kpi-value {
-  font-size: 27px;
-  line-height: 1.1;
-  font-weight: 780;
-  letter-spacing: -0.03em;
-}
-.kpi-label {
-  font-size: .78rem;
-  text-transform: uppercase;
-  letter-spacing: .055em;
-  margin-bottom: 5px;
-}
-.kpi-help {
-  font-size: .78rem;
-  margin-top: 5px;
-}
-.metric-strip {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px;
-  margin: 10px 0 14px 0;
-}
-.metric-tile-label {
-  font-size: .76rem;
-  opacity: .70;
-  text-transform: uppercase;
-  letter-spacing: .05em;
-}
-.metric-tile-value {
-  font-size: 20px;
-  font-weight: 760;
-  margin-top: 4px;
-}
-
-/* Caixas de mensagens */
-.info-box, .warn-box, .auto-box {
-  padding: 12px 14px;
-  margin: 10px 0;
-}
-.info-box { border-left: 4px solid var(--sap-blue); }
-.warn-box { border-left: 4px solid var(--sap-orange); }
-.auto-box { border-left: 4px solid var(--sap-green); }
-
-/* Terminal */
-.terminal-box {
-  white-space: pre-wrap;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
-  line-height: 1.55;
-  padding: 12px 14px;
-  overflow: auto;
-  border-left: 4px solid rgba(10,110,209,.55);
-}
-
-/* Controles Streamlit */
-.stButton > button, .stDownloadButton > button, button[kind="secondary"], button[kind="primary"] {
-  border-radius: 9px !important;
-  border: 1px solid var(--sap-border-strong) !important;
-  font-weight: 650 !important;
   min-height: 38px;
-  box-shadow: none !important;
 }
-.stButton > button:hover, .stDownloadButton > button:hover {
+div[role="radiogroup"] label:hover {border-color: var(--sap-blue) !important;}
+div[role="radiogroup"] label:has(input:checked) {
+  background: #eaf4ff !important;
   border-color: var(--sap-blue) !important;
-  color: var(--sap-blue) !important;
-}
-.stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] > div {
-  border-radius: 9px !important;
-}
-
-/* Dataframes com ar de sistema empresarial */
-[data-testid="stDataFrame"] {
-  border: 1px solid var(--sap-border);
-  border-radius: 12px;
-  overflow: hidden;
-}
-[data-testid="stDataFrame"] div[role="columnheader"] {
+  color: var(--sap-blue-2) !important;
   font-weight: 700 !important;
 }
 
-/* Tabs e expanders */
-.stTabs [data-baseweb="tab-list"] {
-  gap: 6px;
-  border-bottom: 1px solid var(--sap-border);
+/* Painéis e cards */
+.kpi-card, .panel, .sync-card, .metric-tile, div[data-testid="stExpander"] details {
+  background: var(--sap-card);
+  border: 1px solid var(--sap-border) !important;
+  border-radius: var(--sap-radius) !important;
+  box-shadow: var(--sap-shadow);
 }
-.stTabs [data-baseweb="tab"] {
-  border-radius: 10px 10px 0 0;
-  padding: 9px 12px;
-  font-weight: 650;
-}
-.streamlit-expanderHeader {
-  font-weight: 650;
-}
+.kpi-card {padding: 13px 14px; min-height: 86px;}
+.kpi-label {font-size: 12px; color: var(--sap-muted); font-weight: 600; text-transform: uppercase; letter-spacing: .02em;}
+.kpi-value {font-size: 26px; font-weight: 750; color: var(--sap-text); margin-top: 4px;}
+.kpi-help {font-size: 11px; color: var(--sap-muted); margin-top: 2px;}
+.metric-strip {display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;}
+.metric-tile {padding: 12px;}
+.metric-tile-label {font-size: 12px; color: var(--sap-muted);}
+.metric-tile-value {font-size: 18px; color: var(--sap-text); font-weight: 700;}
 
-/* Separadores */
-hr {
-  border-color: var(--sap-border);
-  margin: 1.1rem 0;
-}
+.section-title {font-size: 20px; font-weight: 700; color: var(--sap-text); margin: 8px 0 2px 0;}
+.section-desc {font-size: 13px; color: var(--sap-muted); margin-bottom: 12px;}
+.small-muted, .kpi-help {color: var(--sap-muted);}
 
-/* Remove exageros visuais, mantendo minimalismo */
-[data-testid="stMetric"] {
+.info-box, .warn-box, .auto-box, .terminal-box {
+  background: var(--sap-card);
   border: 1px solid var(--sap-border);
-  border-radius: 12px;
+  border-left: 4px solid var(--sap-blue);
+  border-radius: var(--sap-radius);
   padding: 12px 14px;
-  background: var(--sap-surface);
+  margin-bottom: 12px;
+  box-shadow: var(--sap-shadow);
+  color: var(--sap-text);
+}
+.warn-box {border-left-color: var(--sap-warn);}
+.terminal-box {white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; overflow:auto; max-height: 320px;}
+.badge, .sap-badge {
+  display:inline-block; padding: 4px 9px; border-radius: 999px;
+  background:#eef4fb; color:#24506e; border:1px solid #d3e3f3;
+  margin: 3px 5px 3px 0; font-size: 12px; font-weight: 600;
+}
+.badge.ok {background:#eef8f1;color:#107e3e;border-color:#c7e8d1;}
+.badge.warn {background:#fff4e5;color:#b85c00;border-color:#ffd9a8;}
+
+/* Streamlit controls */
+.stButton > button, .stDownloadButton > button, button[kind="primary"], button[kind="secondary"] {
+  border-radius: 6px !important;
+  border: 1px solid var(--sap-border) !important;
+  box-shadow: none !important;
+  font-weight: 600 !important;
+  min-height: 38px;
+}
+.stButton > button:hover, .stDownloadButton > button:hover {border-color: var(--sap-blue) !important; color: var(--sap-blue-2) !important;}
+[data-testid="stDataFrame"] {border: 1px solid var(--sap-border); border-radius: var(--sap-radius); box-shadow: var(--sap-shadow); overflow: hidden;}
+hr {margin: .8rem 0 !important;}
+
+/* Remove visual antigo que confundia */
+.hero, .hero-grid {display:none !important;}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sap-bg:#0f141a; --sap-card:#151d26; --sap-border:#2b3948; --sap-text:#eaf0f6; --sap-muted:#aab6c2;
+    --sap-shadow: 0 1px 4px rgba(0,0,0,.3);
+  }
+  .sap-shell {background: linear-gradient(90deg,#1b2a3a,#24384d,#1d2f42);} 
+  div[role="radiogroup"] label {background: var(--sap-card) !important; color: var(--sap-text) !important;}
+  div[role="radiogroup"] label:has(input:checked) {background: #12385f !important; color: #d8ecff !important;}
+  .badge, .sap-badge {background:#182b3d;color:#cfe7ff;border-color:#294967;}
 }
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
-st.caption("SAP-style cockpit • Raster + Omnilink/WSTT")
 
 
 def require_login() -> bool:
@@ -311,23 +219,29 @@ def require_login() -> bool:
     if st.session_state.auth_ok:
         return True
 
-    st.markdown("<div class='hero'>", unsafe_allow_html=True)
-    st.markdown("<div class='hero-grid'>", unsafe_allow_html=True)
-    st.markdown("<div class='logo-wrap'>🚚</div>", unsafe_allow_html=True)
     st.markdown(
-        "<div><div class='hero-title'>Central de Integrações</div>"
-        "<p class='hero-subtitle'>Raster + Omnilink/WSTT • Operação, telemetria, viagens e análises em um só lugar.</p>"
-        "<div><span class='badge ok'>Supabase</span><span class='badge info'>Raster</span><span class='badge info'>Omnilink/WSTT</span></div>"
-        "</div>",
+        """
+        <div class="sap-shell">
+          <div class="sap-shell-top">
+            <div class="sap-brand">
+              <div class="sap-logo">🚚</div>
+              <div>
+                <div class="sap-title">Central Operacional Cargoblue</div>
+                <div class="sap-subtitle">Acesso seguro • Raster • Omnilink/WSTT</div>
+              </div>
+            </div>
+            <div class="sap-status"><span class="sap-pill good">Sistema online</span></div>
+          </div>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
-    st.markdown("</div></div>", unsafe_allow_html=True)
 
-    st.write("")
-    c1, c2, c3 = st.columns([1, 1, 1])
+    c1, c2, c3 = st.columns([1.2, 0.9, 1.2])
     with c2:
         with st.container(border=True):
-            st.subheader("Acesso")
+            st.subheader("Entrar no sistema")
+            st.caption("Informe suas credenciais para acessar as integrações.")
             with st.form("login"):
                 usuario = st.text_input("Usuário")
                 senha = st.text_input("Senha", type="password")
@@ -411,29 +325,76 @@ def checklist_status_summary(df: pd.DataFrame):
 
 
 def header():
-    st.markdown("<div class='hero'>", unsafe_allow_html=True)
-    cols = st.columns([0.12, 0.88])
-    with cols[0]:
-        st.markdown("<div class='logo-wrap' style='font-size:42px;width:88px;height:88px;'>🚚</div>", unsafe_allow_html=True)
-    with cols[1]:
-        st.markdown("<div class='hero-title'>Central Operacional Raster + Omnilink/WSTT</div>", unsafe_allow_html=True)
-        st.markdown(
-            "<p class='hero-subtitle'>Cockpit minimalista para integrações, viagens, telemetria, documentos, checklist e execução automática.</p>",
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            "<span class='badge ok'>Layout premium</span>"
-            "<span class='badge info'>Layout organizado</span>"
-            "<span class='badge info'>Sincronizações separadas</span>"
-            "<span class='badge warn'>Detalhamento por placa</span>",
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            "<p class='hero-caption'>Use o menu lateral para navegar entre visão executiva, Raster, Omnilink/WSTT, análises e SQL da estrutura.</p>",
-            unsafe_allow_html=True,
-        )
-    st.markdown("</div>", unsafe_allow_html=True)
-    st.write("")
+    st.markdown(
+        """
+        <div class="sap-shell">
+          <div class="sap-shell-top">
+            <div class="sap-brand">
+              <div class="sap-logo">🚚</div>
+              <div>
+                <div class="sap-title">Central Operacional Cargoblue</div>
+                <div class="sap-subtitle">Raster • Omnilink/WSTT • Supabase • Consultas e automações</div>
+              </div>
+            </div>
+            <div class="sap-status">
+              <span class="sap-pill good">Online</span>
+              <span class="sap-pill">API Raster</span>
+              <span class="sap-pill">Omnilink/WSTT</span>
+              <span class="sap-pill warn">Somente consulta</span>
+            </div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def top_navigation():
+    pages = [
+        "📊 Visão geral",
+        "🛰️ Raster",
+        "🔎 Raster GET/Consultas",
+        "📡 Omnilink/WSTT",
+        "📈 Análises detalhadas",
+        "🖥️ Terminal",
+        "🗄️ Supabase / SQL",
+    ]
+    page = st.radio(
+        "Navegação principal",
+        pages,
+        horizontal=True,
+        label_visibility="collapsed",
+        key="top_nav_page",
+    )
+    return page
+
+
+def top_controls():
+    with st.expander("⚙️ Filtros, execução automática e status da conexão", expanded=False):
+        f1, f2, f3 = st.columns([0.25, 0.25, 0.50])
+        with f1:
+            plate_filter = st.text_input("Filtrar placa", placeholder="Ex.: ABC1234", key="top_plate_filter").upper().replace("-", "").replace(" ", "")
+        with f2:
+            global_search = st.text_input("Busca textual", placeholder="Qualquer palavra-chave", key="top_global_search")
+        with f3:
+            try:
+                test_connection()
+                st.success("Supabase conectado")
+            except Exception as exc:
+                st.error("Supabase com erro")
+                st.caption(str(exc))
+
+        st.divider()
+        c1, c2 = st.columns([0.58, 0.42])
+        with c1:
+            controle_automatico(container=st)
+        with c2:
+            st.markdown("#### Terminal rápido")
+            if st.button("Limpar terminal", use_container_width=True, key="btn_clear_terminal_top"):
+                st.session_state.terminal_logs = []
+                st.rerun()
+            render_terminal_block(height=220, include_db_logs=False)
+    return plate_filter, global_search
 
 
 def df_table(table: str, columns: str = "*", limit: int = 5000, order_by: str | None = None) -> pd.DataFrame:
@@ -680,9 +641,9 @@ def auto_cycle(rotinas: list[str], dias_viagens: int, dias_telemetria: int, limi
     return logs
 
 
-def controle_automatico():
-    st.sidebar.divider()
-    st.sidebar.markdown("#### Execução automática")
+def controle_automatico(container=st.sidebar):
+    container.divider()
+    container.markdown("#### Execução automática")
     if "auto_api_on" not in st.session_state:
         st.session_state.auto_api_on = False
     if "auto_last_run" not in st.session_state:
@@ -690,7 +651,7 @@ def controle_automatico():
     if "auto_last_log" not in st.session_state:
         st.session_state.auto_last_log = []
 
-    c1, c2 = st.sidebar.columns(2)
+    c1, c2 = container.columns(2)
     with c1:
         if st.button("Iniciar", use_container_width=True):
             st.session_state.auto_api_on = True
@@ -701,11 +662,11 @@ def controle_automatico():
             st.session_state.auto_api_on = False
             st.rerun()
 
-    intervalo_min = st.sidebar.number_input("Intervalo", min_value=15, max_value=240, value=30, step=5, help="Intervalo em minutos entre cada ciclo automático. Mínimo 15 min para respeitar limites da Raster.")
-    limite_auto = st.sidebar.number_input("Limite placas auto", min_value=1, max_value=500, value=50, step=10)
-    dias_viagens_auto = st.sidebar.number_input("Dias viagens", min_value=1, max_value=30, value=7, step=1)
-    dias_tele_auto = st.sidebar.number_input("Dias telemetria/eventos", min_value=1, max_value=3, value=1, step=1)
-    rotinas_auto = st.sidebar.multiselect(
+    intervalo_min = container.number_input("Intervalo", min_value=15, max_value=240, value=30, step=5, help="Intervalo em minutos entre cada ciclo automático. Mínimo 15 min para respeitar limites da Raster.")
+    limite_auto = container.number_input("Limite placas auto", min_value=1, max_value=500, value=50, step=10)
+    dias_viagens_auto = container.number_input("Dias viagens", min_value=1, max_value=30, value=7, step=1)
+    dias_tele_auto = container.number_input("Dias telemetria/eventos", min_value=1, max_value=3, value=1, step=1)
+    rotinas_auto = container.multiselect(
         "Rotinas",
         [
             "Raster SM",
@@ -721,14 +682,14 @@ def controle_automatico():
         default=["Raster SM", "Raster status viagem", "Raster checklist existente válido", "WSTT frota", "WSTT viagens", "WSTT telemetria", "WSTT eventos"],
     )
 
-    st.sidebar.caption("Automático inclui StatusViagem e checklist somente consulta. Não cria checklist e usa período automático mês anterior + mês atual para eventos Raster.")
+    container.caption("Automático inclui StatusViagem e checklist somente consulta. Não cria checklist e usa período automático mês anterior + mês atual para eventos Raster.")
 
     if st.session_state.auto_api_on:
-        st.sidebar.success("Automático ligado")
+        container.success("Automático ligado")
         if st_autorefresh is not None:
             st_autorefresh(interval=60 * 1000, key="auto_refresh_tick")
         else:
-            st.sidebar.warning("Instale streamlit-autorefresh para atualização automática mais suave.")
+            container.warning("Instale streamlit-autorefresh para atualização automática mais suave.")
 
         agora = datetime.now(timezone.utc)
         ultimo = st.session_state.auto_last_run
@@ -747,13 +708,13 @@ def controle_automatico():
                     st.session_state.auto_last_run = agora
                     st.toast("Erro no ciclo automático", icon="⚠️")
         if st.session_state.auto_last_run:
-            st.sidebar.caption("Última execução: " + st.session_state.auto_last_run.astimezone().strftime("%d/%m/%Y %H:%M:%S"))
+            container.caption("Última execução: " + st.session_state.auto_last_run.astimezone().strftime("%d/%m/%Y %H:%M:%S"))
         if st.session_state.auto_last_log:
-            with st.sidebar.expander("Último ciclo"):
+            with container.expander("Último ciclo"):
                 for item in st.session_state.auto_last_log:
                     st.write(item)
     else:
-        st.sidebar.info("Automático desligado")
+        container.info("Automático desligado")
 
 
 def fallback_raster_status() -> pd.DataFrame:
@@ -822,7 +783,6 @@ def render_sync_panel(title: str, description: str):
 if not require_login():
     st.stop()
 
-st.caption("✅ Login carregado. Inicializando módulos do sistema...")
 try:
     with st.spinner("Carregando integrações e conexão com Supabase..."):
         load_project_modules()
@@ -831,42 +791,9 @@ except Exception as exc:
     st.exception(exc)
     st.stop()
 
-with st.sidebar:
-    st.markdown("### 🚚 Central")
-    page = st.radio(
-        "Menu",
-        [
-            "📊 Visão geral",
-            "🛰️ Raster",
-            "🔎 Raster GET/Consultas",
-            "📡 Omnilink/WSTT",
-            "📈 Análises detalhadas",
-            "🖥️ Terminal",
-            "🗄️ Supabase / SQL",
-        ],
-        label_visibility="collapsed",
-    )
-
-    st.divider()
-    st.markdown("#### Filtros rápidos")
-    plate_filter = st.text_input("Filtrar placa", placeholder="Ex.: ABC1234").upper().replace("-", "").replace(" ", "")
-    global_search = st.text_input("Busca textual", placeholder="Qualquer palavra-chave")
-
-    controle_automatico()
-    sidebar_terminal_preview()
-
-    st.divider()
-    try:
-        test_connection()
-        st.success("Supabase conectado")
-    except Exception as exc:
-        st.error("Supabase com erro")
-        st.caption(str(exc))
-
-    st.divider()
-    st.markdown("<span class='small-muted'>Usuário e senha do dashboard definidos no arquivo .env.</span>", unsafe_allow_html=True)
-
 header()
+page = top_navigation()
+plate_filter, global_search = top_controls()
 
 page_key = page.split(" ", 1)[1]
 
