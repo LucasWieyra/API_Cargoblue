@@ -1,14 +1,24 @@
 import os
 from typing import Any
 
+import streamlit as st
 from dotenv import load_dotenv
 from postgrest.exceptions import APIError
 from supabase import create_client
 
 load_dotenv()
 
-SUPABASE_URL = (os.getenv("SUPABASE_URL") or "").strip().strip('"')
-SUPABASE_SERVICE_KEY = (os.getenv("SUPABASE_SERVICE_KEY") or "").strip().strip('"')
+def _secret(name: str, default: str = "") -> str:
+    try:
+        value = st.secrets.get(name, None)
+        if value is not None:
+            return str(value).strip().strip('"')
+    except Exception:
+        pass
+    return (os.getenv(name, default) or default).strip().strip('"')
+
+SUPABASE_URL = _secret("SUPABASE_URL")
+SUPABASE_SERVICE_KEY = _secret("SUPABASE_SERVICE_KEY")
 
 if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
     raise RuntimeError("Configure SUPABASE_URL e SUPABASE_SERVICE_KEY no arquivo .env")
