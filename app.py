@@ -677,7 +677,7 @@ def top_controls():
         st.divider()
         c1, c2 = st.columns([0.58, 0.42])
         with c1:
-            controle_automatico(container=st)
+            controle_automatico(container=st, key_prefix="auto_top")
         with c2:
             st.markdown("#### Terminal rápido")
             if st.button("Limpar terminal", use_container_width=True, key="btn_clear_terminal_top"):
@@ -2039,7 +2039,7 @@ elif page_key == "Automações":
     c1, c2 = st.columns([0.42, 0.58])
     with c1:
         with st.container(border=True):
-            controle_automatico(container=st)
+            controle_automatico(container=st, key_prefix="auto_page")
     with c2:
         render_automation_monitor(compact=False)
     st.markdown("### Últimas execuções gravadas")
