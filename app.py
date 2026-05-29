@@ -303,22 +303,22 @@ def require_login() -> bool:
     omni = img_tag("omnilink.svg", "Omnilink", "module-img")
     doc = img_tag("docs.svg", "Documentação", "module-img")
 
-    st.markdown(
-        """
+    # CSS específico da tela de login. Evita HTML aberto envolvendo widgets Streamlit.
+    st.markdown("""
 <style>
 .block-container {
     padding-top: 2.2rem !important;
     max-width: 1280px !important;
 }
-[data-testid="stSidebar"] { display: none; }
-[data-testid="stHeader"] { background: transparent; }
+[data-testid="stSidebar"] {display: none;}
+[data-testid="stHeader"] {background: transparent;}
 .login-top-shell {
     width: 100%;
     margin: 0 auto;
     padding: 18px;
     border-radius: 24px;
-    background: rgba(255, 255, 255, 0.92);
-    border: 1px solid rgba(203, 213, 225, 0.9);
+    background: var(--sap-card);
+    border: 1px solid var(--sap-border);
     box-shadow: 0 24px 70px rgba(15, 23, 42, 0.10);
 }
 .login-hero-fixed {
@@ -327,7 +327,7 @@ def require_login() -> bool:
     padding: 42px 38px;
     background:
         radial-gradient(circle at top left, rgba(10, 110, 209, 0.13), transparent 34%),
-        linear-gradient(135deg, #eef7ff 0%, #f8fbff 55%, #effdf6 100%);
+        linear-gradient(135deg, rgba(234,247,255,.96) 0%, rgba(248,251,255,.96) 55%, rgba(239,253,246,.96) 100%);
     border: 1px solid #cfe3f3;
     overflow: hidden;
 }
@@ -376,35 +376,35 @@ def require_login() -> bool:
     font-size: 14px;
     margin-top: 4px;
 }
-.login-panel-head { margin-bottom: 18px; }
+.login-panel-head {margin-bottom: 18px;}
 .login-panel-title {
     font-size: 25px;
     font-weight: 850;
-    color: #1f2d3d;
+    color: var(--sap-text);
     margin-bottom: 8px;
     letter-spacing: -0.3px;
 }
 .login-panel-subtitle {
-    color: #6b7c90;
+    color: var(--sap-muted);
     font-size: 15px;
     line-height: 1.6;
 }
 div[data-testid="stForm"] {
     min-height: 430px;
-    border: 1px solid #d8e1ea !important;
+    border: 1px solid var(--sap-border) !important;
     border-radius: 20px !important;
     padding: 36px 32px 30px 32px !important;
-    background: rgba(255, 255, 255, 0.96) !important;
+    background: var(--sap-card) !important;
     box-shadow: 0 14px 38px rgba(15, 23, 42, 0.08) !important;
 }
 div[data-testid="stTextInput"] label {
     font-weight: 700;
-    color: #24364b;
+    color: var(--sap-text);
     font-size: 14px;
 }
 div[data-testid="stTextInput"] input {
     border-radius: 13px;
-    background: #f6f8fb;
+    background: rgba(246, 248, 251, .96);
     border: 1px solid #dce5ef;
     min-height: 46px;
     color: #172b43;
@@ -434,33 +434,40 @@ div[data-testid="stFormSubmitButton"] button:hover {
     margin-top: 18px;
     padding: 12px 14px;
     border-radius: 14px;
-    background: #f8fafc;
+    background: rgba(248,250,252,.85);
     border: 1px solid #e2e8f0;
     color: #64748b;
     font-size: 13px;
     line-height: 1.5;
 }
+@media (prefers-color-scheme: dark) {
+    .login-hero-fixed {
+        background: linear-gradient(135deg, rgba(10,110,209,.18), rgba(16,126,62,.10));
+        border-color: rgba(120, 140, 160, .30);
+    }
+    .login-title-fixed, .login-feature-title {color: var(--sap-text);}
+    .login-subtitle-fixed, .login-feature-desc {color: var(--sap-muted);}
+    .login-feature-card {background: rgba(21,29,38,.80); border-color: var(--sap-border);}
+    .login-security-note {background: rgba(15, 23, 31, .55); color: var(--sap-muted); border-color: var(--sap-border);}
+    div[data-testid="stTextInput"] input {background: rgba(15,23,31,.78); color: var(--sap-text); border-color: var(--sap-border);}
+}
 @media (max-width: 900px) {
-    .login-feature-grid { grid-template-columns: 1fr; }
-    .login-title-fixed { font-size: 28px; }
-    .login-hero-fixed { min-height: auto; }
-    div[data-testid="stForm"] { min-height: auto; }
+    .login-feature-grid {grid-template-columns: 1fr;}
+    .login-title-fixed {font-size: 28px;}
+    .login-hero-fixed, div[data-testid="stForm"] {min-height: auto;}
 }
 </style>
-        """,
-        unsafe_allow_html=True,
-    )
+""", unsafe_allow_html=True)
 
     st.markdown('<div class="login-top-shell">', unsafe_allow_html=True)
     col_left, col_right = st.columns([1.25, 0.9], gap="large")
 
     with col_left:
+        # Importante: HTML sem indentação inicial para não virar bloco de código no Markdown.
         st.markdown(f"""
 <div class="login-hero-fixed">
     {logo}
-    <div class="login-title-fixed">
-        Central Operacional<br/>Raster + Omnilink/WSTT
-    </div>
+    <div class="login-title-fixed">Central Operacional<br/>Raster + Omnilink/WSTT</div>
     <div class="login-subtitle-fixed">
         Sistema corporativo para consultas, sincronizações, análise operacional,
         terminal das automações e documentação de uso.
@@ -485,46 +492,28 @@ div[data-testid="stFormSubmitButton"] button:hover {
 </div>
 """, unsafe_allow_html=True)
 
+    entrar = False
+    usuario = ""
+    senha = ""
+
     with col_right:
         with st.form("login_form", clear_on_submit=False):
-            st.markdown(
-                """
+            st.markdown("""
 <div class="login-panel-head">
     <div class="login-panel-title">Entrar no sistema</div>
-    <div class="login-panel-subtitle">
-        Acesso seguro ao cockpit operacional.
-    </div>
+    <div class="login-panel-subtitle">Acesso seguro ao cockpit operacional.</div>
 </div>
-                """,
-                unsafe_allow_html=True,
-            )
+""", unsafe_allow_html=True)
 
-            usuario = st.text_input(
-                "Usuário",
-                placeholder="Digite seu usuário",
-                key="login_usuario",
-            )
+            usuario = st.text_input("Usuário", placeholder="Digite seu usuário", key="login_usuario")
+            senha = st.text_input("Senha", type="password", placeholder="Digite sua senha", key="login_senha")
+            entrar = st.form_submit_button("Entrar", use_container_width=True)
 
-            senha = st.text_input(
-                "Senha",
-                type="password",
-                placeholder="Digite sua senha",
-                key="login_senha",
-            )
-
-            entrar = st.form_submit_button(
-                "Entrar",
-                use_container_width=True,
-            )
-
-            st.markdown(
-                """
+            st.markdown("""
 <div class="login-security-note">
     Ambiente restrito para operação, consulta de APIs, automações e análises internas.
 </div>
-                """,
-                unsafe_allow_html=True,
-            )
+""", unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -688,7 +677,7 @@ def top_controls():
         st.divider()
         c1, c2 = st.columns([0.58, 0.42])
         with c1:
-            controle_automatico(container=st, key_prefix="auto_top")
+            controle_automatico(container=st)
         with c2:
             st.markdown("#### Terminal rápido")
             if st.button("Limpar terminal", use_container_width=True, key="btn_clear_terminal_top"):
@@ -945,18 +934,15 @@ def auto_cycle(rotinas: list[str], dias_viagens: int, dias_telemetria: int, limi
 def controle_automatico(container=st, key_prefix="auto"):
     ui = container
 
+    # Inicializa estado da automação antes de qualquer uso.
     if "auto_api_on" not in st.session_state:
         st.session_state.auto_api_on = False
-
     if "auto_running" not in st.session_state:
         st.session_state.auto_running = False
-
     if "auto_last_run" not in st.session_state:
         st.session_state.auto_last_run = None
-
     if "auto_last_log" not in st.session_state:
         st.session_state.auto_last_log = []
-
     if "auto_force_run" not in st.session_state:
         st.session_state.auto_force_run = False
 
@@ -977,6 +963,8 @@ def controle_automatico(container=st, key_prefix="auto"):
     with col3:
         if ui.button("Executar agora", use_container_width=True, key=f"{key_prefix}_btn_executar_agora"):
             st.session_state.auto_force_run = True
+            st.session_state.auto_api_on = True
+            st.session_state.auto_running = True
             ui.info("Execução manual iniciada.")
 
     intervalo_min = ui.number_input(
@@ -988,7 +976,6 @@ def controle_automatico(container=st, key_prefix="auto"):
         help="Intervalo em minutos entre cada ciclo automático. Mínimo 15 min para respeitar limites da Raster.",
         key=f"{key_prefix}_intervalo_min",
     )
-
     limite_auto = ui.number_input(
         "Limite placas auto",
         min_value=1,
@@ -997,25 +984,22 @@ def controle_automatico(container=st, key_prefix="auto"):
         step=10,
         key=f"{key_prefix}_limite_auto",
     )
-
     dias_viagens_auto = ui.number_input(
         "Dias viagens",
         min_value=1,
         max_value=30,
         value=7,
         step=1,
-        key=f"{key_prefix}_dias_viagens",
+        key=f"{key_prefix}_dias_viagens_auto",
     )
-
     dias_tele_auto = ui.number_input(
         "Dias telemetria/eventos",
         min_value=1,
         max_value=3,
         value=1,
         step=1,
-        key=f"{key_prefix}_dias_tele",
+        key=f"{key_prefix}_dias_tele_auto",
     )
-
     rotinas_auto = ui.multiselect(
         "Rotinas",
         [
@@ -1049,17 +1033,13 @@ def controle_automatico(container=st, key_prefix="auto"):
         ui.success("Automático ligado")
 
         if st_autorefresh is not None:
-            st_autorefresh(
-                interval=60 * 1000,
-                key=f"{key_prefix}_auto_refresh_tick",
-            )
+            st_autorefresh(interval=60 * 1000, key=f"{key_prefix}_auto_refresh_tick")
         else:
             ui.warning("Instale streamlit-autorefresh para atualização automática mais suave.")
 
         agora = datetime.now(timezone.utc)
         ultimo = st.session_state.auto_last_run
         intervalo_seg = int(intervalo_min) * 60
-
         deve_rodar = (
             st.session_state.auto_force_run
             or ultimo is None
@@ -1068,49 +1048,29 @@ def controle_automatico(container=st, key_prefix="auto"):
 
         if deve_rodar and rotinas_auto:
             st.session_state.auto_force_run = False
-
             with st.status("Executando ciclo automático das APIs...", expanded=True) as _auto_status:
                 try:
-                    logs = auto_cycle(
-                        rotinas_auto,
-                        int(dias_viagens_auto),
-                        int(dias_tele_auto),
-                        int(limite_auto),
-                    )
+                    logs = auto_cycle(rotinas_auto, int(dias_viagens_auto), int(dias_tele_auto), int(limite_auto))
                     st.session_state.auto_last_log = logs
                     st.session_state.auto_last_run = agora
-                    _auto_status.update(
-                        label="Ciclo automático concluído",
-                        state="complete",
-                        expanded=False,
-                    )
+                    _auto_status.update(label="Ciclo automático concluído", state="complete", expanded=False)
                     st.toast("Ciclo automático concluído", icon="✅")
-
                 except Exception as exc:
                     terminal_log(f"Erro no ciclo automático: {exc}", "ERRO")
                     st.session_state.auto_last_log = [f"Erro: {exc}"]
                     st.session_state.auto_last_run = agora
-                    _auto_status.update(
-                        label="Erro no ciclo automático",
-                        state="error",
-                        expanded=True,
-                    )
+                    _auto_status.update(label="Erro no ciclo automático", state="error", expanded=True)
                     st.toast("Erro no ciclo automático", icon="⚠️")
 
         if st.session_state.auto_last_run:
-            ui.caption(
-                "Última execução: "
-                + st.session_state.auto_last_run.astimezone().strftime("%d/%m/%Y %H:%M:%S")
-            )
+            ui.caption("Última execução: " + st.session_state.auto_last_run.astimezone().strftime("%d/%m/%Y %H:%M:%S"))
 
         if st.session_state.auto_last_log:
             with ui.expander("Último ciclo"):
                 for item in st.session_state.auto_last_log:
                     st.write(item)
-
     else:
         ui.info("Automático desligado")
-
 
 def fallback_raster_status() -> pd.DataFrame:
     viagens = df_table("raster_evento_fim_viagem", "placa_veiculo,status_checklist,aptidao_operacional,dentro_prazo,desvios_rota,eventos_velocidade,synced_at", 20000, "synced_at")
@@ -2079,7 +2039,7 @@ elif page_key == "Automações":
     c1, c2 = st.columns([0.42, 0.58])
     with c1:
         with st.container(border=True):
-            controle_automatico(container=st, key_prefix="auto_page")
+            controle_automatico(container=st)
     with c2:
         render_automation_monitor(compact=False)
     st.markdown("### Últimas execuções gravadas")

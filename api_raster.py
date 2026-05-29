@@ -360,12 +360,41 @@ def sync_evento_fim_viagem() -> int:
 
         viagens = _list_from(data, "Viagens", "Viagem")
         rows: list[dict[str, Any]] = []
+        doc_rows: list[dict[str, Any]] = []
 
         for v in viagens:
             cod = to_int(v.get("CodSolicitacao"))
             if not cod:
                 continue
             status_checklist = str(v.get("StatusChecklist") or "").upper().strip() or None
+            placa_norm = normalize_placa(v.get("PlacaVeiculo"))
+            cod_pre = to_int(v.get("CodPreSolicitacao"))
+            chave_status = _safe_key("getEventoFimViagem", cod, cod_pre, placa_norm)
+
+            # Parser oficial dos documentos de viagem.
+            # A Raster confirmou que CARGA/CTE ficam aninhados em:
+            # SM -> ColetasEntregas -> Produtos -> Documentos.
+            # A função _extract_documentos_status_viagem varre recursivamente
+            # todo o retorno e captura Documentos em qualquer profundidade.
+            documentos_viagem = _extract_documentos_status_viagem(v)
+            for idx, doc in enumerate(documentos_viagem, start=1):
+                tipo_doc = str(doc.get("tipo") or "").upper().strip() or None
+                numero_doc = str(doc.get("numero") or "").strip() or None
+                if not numero_doc:
+                    continue
+                doc_rows.append({
+                    "chave": _safe_key("getEventoFimViagem", cod, cod_pre, placa_norm, tipo_doc, numero_doc, idx),
+                    "chave_status_viagem": chave_status,
+                    "cod_solicitacao": cod,
+                    "cod_pre_solicitacao": cod_pre,
+                    "placa_veiculo": placa_norm,
+                    "tipo": tipo_doc,
+                    "numero": numero_doc,
+                    "origem": doc.get("origem") or "getEventoFimViagem:ColetasEntregas.Produtos.Documentos",
+                    "raw": doc.get("raw") or doc,
+                    "synced_at": now_iso(),
+                })
+
             rows.append({
                 "cod_solicitacao": cod,
                 "cod_filial": to_int(v.get("CodFilial")),
@@ -397,8 +426,20 @@ def sync_evento_fim_viagem() -> int:
             })
 
         total = upsert_rows("raster_evento_fim_viagem", rows, "cod_solicitacao")
-        log_execucao(rotina, "sucesso", total)
-        return total
+
+        # Salva também os documentos vinculados à viagem/SM encontrados no retorno
+        # do getEventoFimViagem. Isso permite montar base por CARGA/CTE sem depender
+        # de vínculo manual e sem criar/alterar nada na Raster.
+        total_docs = 0
+        if doc_rows:
+            try:
+                total_docs = upsert_rows("raster_status_viagem_documentos", doc_rows, "chave")
+            except Exception as exc_docs:
+                log_execucao("Evento fim viagem documentos", "erro", 0, str(exc_docs))
+                print("Erro ao salvar documentos do getEventoFimViagem:", exc_docs)
+
+        log_execucao(rotina, "sucesso", total + total_docs)
+        return total + total_docs
     except Exception as exc:
         erro = _resumo_erro_raster({
             "mensagem": "Exception em getEventoFimViagem",
