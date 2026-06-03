@@ -41,15 +41,46 @@ def test_connection() -> bool:
     return True
 
 
-def upsert_rows(table: str, rows: list[dict[str, Any]], on_conflict: str, batch_size: int = 300) -> int:
+def _dedupe_rows_by_conflict(rows: list[dict[str, Any]], conflict_cols: list[str]) -> list[dict[str, Any]]:
+    """
+    Evita erro PostgreSQL 21000:
+    ON CONFLICT DO UPDATE command cannot affect row a second time.
+
+    Esse erro acontece quando o mesmo upsert envia duas linhas com a mesma chave
+    dentro do mesmo lote, por exemplo a mesma SM ou o mesmo documento repetido no
+    retorno da Raster. Mantemos o último registro, que normalmente é o mais recente.
+    """
+    deduped: dict[tuple[Any, ...], dict[str, Any]] = {}
+
+    for row in rows:
+        key = tuple(row.get(col) for col in conflict_cols)
+        if any(value in (None, "") for value in key):
+            continue
+        deduped[key] = row
+
+    return list(deduped.values())
+
+
+def upsert_rows(table: str, rows: list[dict[str, Any]], on_conflict: str, batch_size: int = 200) -> int:
     if not rows:
         return 0
+
     rows = [clean_row(r) for r in rows]
-    conflict_cols = [c.strip() for c in on_conflict.split(",")]
+    conflict_cols = [c.strip() for c in on_conflict.split(",") if c.strip()]
+
+    # Primeiro remove linhas sem chave válida.
     valid_rows = []
     for row in rows:
         if all(row.get(c) not in (None, "") for c in conflict_cols):
             valid_rows.append(row)
+
+    if not valid_rows:
+        return 0
+
+    # Depois remove duplicidade dentro do mesmo payload antes do upsert.
+    # Isso corrige o erro: ON CONFLICT DO UPDATE command cannot affect row a second time.
+    valid_rows = _dedupe_rows_by_conflict(valid_rows, conflict_cols)
+
     if not valid_rows:
         return 0
 
@@ -63,6 +94,7 @@ def upsert_rows(table: str, rows: list[dict[str, Any]], on_conflict: str, batch_
             print("\n========== ERRO SUPABASE UPSERT ==========")
             print("Tabela:", table)
             print("Chave:", on_conflict)
+            print("Quantidade lote:", len(batch))
             print("Primeiro registro:", batch[0] if batch else None)
             print("Erro completo:", exc)
             print("==========================================\n")
