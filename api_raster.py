@@ -659,41 +659,92 @@ def _salvar_evento_fim_viagens(
     return total + total_coletas + total_docs + total_pernoites
 
 
-def sync_evento_fim_viagem() -> int:
-    rotina = "Evento fim viagem"
-    total_geral = 0
-    erros: list[str] = []
+def sync_evento_fim_viagem():
+    """
+    getEventoFimViagem seguro:
+    - mês anterior completo
+    - mês atual completo
+    - StatusViagem = T
+    - consulta em blocos diários para evitar timeout/limite Raster
+    """
+    hoje = date.today()
 
-    for data_inicial, data_final, periodo_nome in _periodos_evento_fim_mes_anterior_e_atual():
-        try:
-            lotes = _consultar_evento_fim_periodo_fracionado(data_inicial, data_final, periodo_nome)
-            for ini_lote, fim_lote, nome_lote, viagens, payload in lotes:
-                total_periodo = _salvar_evento_fim_viagens(viagens, ini_lote, fim_lote, nome_lote)
-                total_geral += total_periodo
-                log_execucao(
-                    f"{rotina} {nome_lote}",
-                    "sucesso",
-                    total_periodo,
-                    f"payload={json.dumps(payload, ensure_ascii=False)} viagens_retornadas={len(viagens)} limite_por_chamada={_evento_fim_max_por_chamada()}"
-                )
-                time.sleep(_evento_fim_delay_seconds())
-        except Exception as exc:
-            payload = _evento_fim_payload(data_inicial, data_final)
-            erro = _resumo_erro_raster({
-                "mensagem": "Exception em getEventoFimViagem",
-                "periodo": periodo_nome,
-                "payload_enviado": payload,
-                "erro": str(exc),
-            })
-            log_execucao(f"{rotina} {periodo_nome}", "erro", 0, erro)
-            print(erro)
-            erros.append(erro)
-            continue
+    primeiro_mes_atual = hoje.replace(day=1)
+    ultimo_mes_anterior = primeiro_mes_atual - timedelta(days=1)
+    primeiro_mes_anterior = ultimo_mes_anterior.replace(day=1)
 
-    if total_geral == 0 and erros:
-        return 0
-    log_execucao(rotina, "sucesso", total_geral, f"Consulta fracionada ativa. Limite por chamada={_evento_fim_max_por_chamada()}")
-    return total_geral
+    ultimo_mes_atual = (primeiro_mes_atual.replace(day=28) + timedelta(days=4))
+    ultimo_mes_atual = ultimo_mes_atual.replace(day=1) - timedelta(days=1)
+
+    periodos = [
+        ("mes_anterior", primeiro_mes_anterior, ultimo_mes_anterior),
+        ("mes_atual", primeiro_mes_atual, ultimo_mes_atual),
+    ]
+
+    total = 0
+    erros = []
+
+    for nome_periodo, data_ini, data_fim in periodos:
+        dia = data_ini
+
+        while dia <= data_fim:
+            payload = {
+                "DataInicial": dia.strftime("%Y-%m-%d"),
+                "DataFinal": dia.strftime("%Y-%m-%d"),
+                "StatusViagem": get_config("RASTER_EVENTO_FIM_STATUS", "T"),
+            }
+
+            try:
+                data = raster_call("getEventoFimViagem", payload)
+
+                cod_erro = str(data.get("CodErro", "0"))
+                if cod_erro not in ("0", "", "None"):
+                    erros.append({
+                        "periodo": nome_periodo,
+                        "dia": dia.strftime("%Y-%m-%d"),
+                        "payload": payload,
+                        "retorno": data,
+                    })
+                    dia += timedelta(days=1)
+                    time.sleep(float(get_config("RASTER_EVENTO_FIM_DELAY_SECONDS", "2")))
+                    continue
+
+                viagens = extract_list(data, ["Viagens", "viagens", "SM", "sm"])
+
+                if viagens:
+                    qtd = salvar_evento_fim_viagem_completo(viagens, payload, nome_periodo)
+                    total += qtd
+
+                time.sleep(float(get_config("RASTER_EVENTO_FIM_DELAY_SECONDS", "2")))
+
+            except Exception as exc:
+                erros.append({
+                    "periodo": nome_periodo,
+                    "dia": dia.strftime("%Y-%m-%d"),
+                    "payload": payload,
+                    "erro": str(exc),
+                })
+
+            dia += timedelta(days=1)
+
+    if erros:
+        registrar_execucao(
+            origem="Raster",
+            rotina="Evento fim viagem",
+            status="parcial" if total > 0 else "erro",
+            qtd_registros=total,
+            erro=json.dumps(erros[-5:], ensure_ascii=False, default=str),
+        )
+    else:
+        registrar_execucao(
+            origem="Raster",
+            rotina="Evento fim viagem",
+            status="sucesso",
+            qtd_registros=total,
+            erro=None,
+        )
+
+    return total
 
 
 def _coletar_placas_raster_status(limite: int = 50) -> list[str]:
