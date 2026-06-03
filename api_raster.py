@@ -212,14 +212,31 @@ def call_raster(metodo: str, body: dict[str, Any] | None = None) -> dict[str, An
     if body:
         payload.update(body)
 
-    urls = [f'{_base_url()}/"{metodo}"', f"{_base_url()}/{metodo}"]
+    # DataSnap da Raster, no ambiente informado, usa o método com aspas na URL.
+    # A tentativa sem aspas pode gerar: updategetEventoFimViagem method not found.
+    # Por isso ela só é usada se RASTER_ALLOW_UNQUOTED_URL=1.
+    urls = [f'{_base_url()}/"{metodo}"']
+    if str(_env("RASTER_ALLOW_UNQUOTED_URL", "0")).strip() == "1":
+        urls.append(f"{_base_url()}/{metodo}")
+
+    timeout = int(_env("RASTER_TIMEOUT_SECONDS", "90") or 90)
+    tentativas_http: list[dict[str, Any]] = []
     last_error: Exception | None = None
 
     for url in urls:
         try:
-            response = requests.post(url, json=payload, timeout=int(_env("RASTER_TIMEOUT_SECONDS", "20") or 20))
-            response.raise_for_status()
-            data = response.json()
+            response = requests.post(url, json=payload, timeout=timeout)
+            status_code = response.status_code
+            try:
+                body_resp = response.json()
+            except Exception:
+                body_resp = response.text[:2000]
+
+            if status_code >= 400:
+                tentativas_http.append({"url": url, "status_code": status_code, "body": body_resp})
+                continue
+
+            data = body_resp
             if isinstance(data, dict) and isinstance(data.get("result"), list) and data["result"]:
                 item = data["result"][0]
                 return item if isinstance(item, dict) else {"raw": item}
@@ -228,9 +245,18 @@ def call_raster(metodo: str, body: dict[str, Any] | None = None) -> dict[str, An
             return {"raw": data}
         except Exception as exc:
             last_error = exc
+            tentativas_http.append({"url": url, "exception": str(exc)})
             continue
 
-    raise RuntimeError(f"Erro ao chamar Raster {metodo}: {last_error}")
+    return {
+        "Metodo": metodo,
+        "CodErro": "HTTP_ERROR",
+        "MsgErro": f"Erro ao chamar Raster {metodo}. Verifique as tentativas em raw/tentativas_http.",
+        "Ambiente": _ambiente(),
+        "payload_enviado": body or {},
+        "tentativas_http": tentativas_http,
+        "ultima_exception": str(last_error) if last_error else None,
+    }
 
 
 def _ok(data: dict[str, Any]) -> bool:
@@ -524,6 +550,32 @@ def _split_periodo(data_inicial: str, data_final: str) -> tuple[tuple[str, str],
     return (ini.isoformat(), meio.isoformat()), ((meio + timedelta(days=1)).isoformat(), fim.isoformat())
 
 
+def _chunk_days_evento_fim() -> int:
+    try:
+        valor = int(str(_env("RASTER_EVENTO_FIM_CHUNK_DAYS", "1") or "1"))
+    except Exception:
+        valor = 1
+    return max(1, min(valor, 7))
+
+
+def _periodo_em_chunks(data_inicial: str, data_final: str) -> list[tuple[str, str]]:
+    """Quebra o período antes da primeira chamada.
+
+    O getEventoFimViagem com StatusViagem=T costuma dar timeout quando consulta
+    o mês inteiro. Por isso a rotina já nasce fracionada, normalmente dia a dia.
+    """
+    ini = _date_from_iso(data_inicial)
+    fim = _date_from_iso(data_final)
+    chunk_days = _chunk_days_evento_fim()
+    partes: list[tuple[str, str]] = []
+    atual = ini
+    while atual <= fim:
+        fim_chunk = min(atual + timedelta(days=chunk_days - 1), fim)
+        partes.append((atual.isoformat(), fim_chunk.isoformat()))
+        atual = fim_chunk + timedelta(days=1)
+    return partes
+
+
 def _consultar_evento_fim_periodo_fracionado(
     data_inicial: str,
     data_final: str,
@@ -659,92 +711,54 @@ def _salvar_evento_fim_viagens(
     return total + total_coletas + total_docs + total_pernoites
 
 
-def sync_evento_fim_viagem():
-    """
-    getEventoFimViagem seguro:
-    - mês anterior completo
-    - mês atual completo
-    - StatusViagem = T
-    - consulta em blocos diários para evitar timeout/limite Raster
-    """
-    hoje = date.today()
+def sync_evento_fim_viagem() -> int:
+    rotina = "Evento fim viagem"
+    total_geral = 0
+    erros: list[str] = []
+    dias_processados = 0
 
-    primeiro_mes_atual = hoje.replace(day=1)
-    ultimo_mes_anterior = primeiro_mes_atual - timedelta(days=1)
-    primeiro_mes_anterior = ultimo_mes_anterior.replace(day=1)
-
-    ultimo_mes_atual = (primeiro_mes_atual.replace(day=28) + timedelta(days=4))
-    ultimo_mes_atual = ultimo_mes_atual.replace(day=1) - timedelta(days=1)
-
-    periodos = [
-        ("mes_anterior", primeiro_mes_anterior, ultimo_mes_anterior),
-        ("mes_atual", primeiro_mes_atual, ultimo_mes_atual),
-    ]
-
-    total = 0
-    erros = []
-
-    for nome_periodo, data_ini, data_fim in periodos:
-        dia = data_ini
-
-        while dia <= data_fim:
-            payload = {
-                "DataInicial": dia.strftime("%Y-%m-%d"),
-                "DataFinal": dia.strftime("%Y-%m-%d"),
-                "StatusViagem": get_config("RASTER_EVENTO_FIM_STATUS", "T"),
-            }
-
+    # Consulta mês anterior completo + mês atual completo, mas já quebrando
+    # antes da primeira chamada. Isso evita timeout quando StatusViagem=T.
+    for data_inicial, data_final, periodo_nome in _periodos_evento_fim_mes_anterior_e_atual():
+        for ini_chunk, fim_chunk in _periodo_em_chunks(data_inicial, data_final):
+            dias_processados += 1
+            nome_chunk = f"{periodo_nome}_{ini_chunk}_a_{fim_chunk}"
+            payload = _evento_fim_payload(ini_chunk, fim_chunk)
             try:
-                data = raster_call("getEventoFimViagem", payload)
-
-                cod_erro = str(data.get("CodErro", "0"))
-                if cod_erro not in ("0", "", "None"):
-                    erros.append({
-                        "periodo": nome_periodo,
-                        "dia": dia.strftime("%Y-%m-%d"),
-                        "payload": payload,
-                        "retorno": data,
-                    })
-                    dia += timedelta(days=1)
-                    time.sleep(float(get_config("RASTER_EVENTO_FIM_DELAY_SECONDS", "2")))
-                    continue
-
-                viagens = extract_list(data, ["Viagens", "viagens", "SM", "sm"])
-
-                if viagens:
-                    qtd = salvar_evento_fim_viagem_completo(viagens, payload, nome_periodo)
-                    total += qtd
-
-                time.sleep(float(get_config("RASTER_EVENTO_FIM_DELAY_SECONDS", "2")))
-
+                lotes = _consultar_evento_fim_periodo_fracionado(ini_chunk, fim_chunk, nome_chunk)
+                for ini_lote, fim_lote, nome_lote, viagens, payload_lote in lotes:
+                    total_periodo = _salvar_evento_fim_viagens(viagens, ini_lote, fim_lote, nome_lote)
+                    total_geral += total_periodo
+                    log_execucao(
+                        f"{rotina} {nome_lote}",
+                        "sucesso",
+                        total_periodo,
+                        f"payload={json.dumps(payload_lote, ensure_ascii=False)} viagens_retornadas={len(viagens)} limite_por_chamada={_evento_fim_max_por_chamada()} chunk_days={_chunk_days_evento_fim()}"
+                    )
+                time.sleep(_evento_fim_delay_seconds())
             except Exception as exc:
-                erros.append({
-                    "periodo": nome_periodo,
-                    "dia": dia.strftime("%Y-%m-%d"),
-                    "payload": payload,
+                erro = _resumo_erro_raster({
+                    "mensagem": "Exception em getEventoFimViagem",
+                    "periodo": nome_chunk,
+                    "payload_enviado": payload,
                     "erro": str(exc),
                 })
+                log_execucao(f"{rotina} {nome_chunk}", "erro", 0, erro)
+                print(erro)
+                erros.append(erro)
+                time.sleep(_evento_fim_delay_seconds())
+                continue
 
-            dia += timedelta(days=1)
-
+    status_final = "sucesso" if not erros else ("parcial" if total_geral > 0 else "erro")
+    resumo = (
+        f"Consulta por chunks ativa. chunks_processados={dias_processados} "
+        f"chunk_days={_chunk_days_evento_fim()} limite_por_chamada={_evento_fim_max_por_chamada()} "
+        f"erros={len(erros)}"
+    )
     if erros:
-        registrar_execucao(
-            origem="Raster",
-            rotina="Evento fim viagem",
-            status="parcial" if total > 0 else "erro",
-            qtd_registros=total,
-            erro=json.dumps(erros[-5:], ensure_ascii=False, default=str),
-        )
-    else:
-        registrar_execucao(
-            origem="Raster",
-            rotina="Evento fim viagem",
-            status="sucesso",
-            qtd_registros=total,
-            erro=None,
-        )
-
-    return total
+        resumo += " | ultimos_erros=" + " | ".join(erros[-3:])
+    log_execucao(rotina, status_final, total_geral, resumo)
+    return total_geral
 
 
 def _coletar_placas_raster_status(limite: int = 50) -> list[str]:
