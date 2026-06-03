@@ -162,24 +162,31 @@ def _documentos_resumo(documentos: list[dict[str, Any]]) -> str | None:
     return ", ".join(partes) if partes else None
 
 
-def _periodo_mes_anterior_atual() -> tuple[str, str]:
-    """Retorna do 1º dia do mês anterior até hoje.
+def _ultimo_dia_mes(ref: date) -> date:
+    if ref.month == 12:
+        return date(ref.year, 12, 31)
+    return date(ref.year, ref.month + 1, 1) - timedelta(days=1)
 
-    Uso padrão para rotinas Raster por período sem precisar preencher nada.
-    """
+
+def _periodos_evento_fim_mes_anterior_e_atual() -> list[tuple[str, str, str]]:
+    """Períodos automáticos do getEventoFimViagem: mês anterior completo + mês atual completo."""
     hoje = date.today()
     primeiro_mes_atual = hoje.replace(day=1)
     ultimo_mes_anterior = primeiro_mes_atual - timedelta(days=1)
     primeiro_mes_anterior = ultimo_mes_anterior.replace(day=1)
-    return primeiro_mes_anterior.isoformat(), hoje.isoformat()
+    ultimo_mes_atual = _ultimo_dia_mes(hoje)
+    return [
+        (primeiro_mes_anterior.isoformat(), ultimo_mes_anterior.isoformat(), "mes_anterior"),
+        (primeiro_mes_atual.isoformat(), ultimo_mes_atual.isoformat(), "mes_atual"),
+    ]
+
+
+def _periodo_mes_anterior_atual() -> tuple[str, str]:
+    periodos = _periodos_evento_fim_mes_anterior_e_atual()
+    return periodos[0][0], periodos[-1][1]
 
 
 def _periodo_raster_evento_fim() -> tuple[str, str]:
-    """Período automático para getEventoFimViagem.
-
-    Padrão: mês anterior + mês atual. Se quiser usar janela curta, configure
-    RASTER_EVENTO_FIM_DIAS no .env/Secrets.
-    """
     dias_txt = _env("RASTER_EVENTO_FIM_DIAS", "")
     if dias_txt:
         dias = to_int(dias_txt) or 1
@@ -313,27 +320,175 @@ def sync_sm_abertas() -> int:
         raise
 
 
-def _evento_fim_payload() -> dict[str, Any]:
+def _evento_fim_payload(data_inicial: str | None = None, data_final: str | None = None) -> dict[str, Any]:
     """Payload seguro para getEventoFimViagem.
 
     Padrão automático: mês anterior + mês atual, sem precisar preencher nada.
     O manual permite DataInicial/DataFinal/StatusViagem/Placa como filtros opcionais.
     """
-    data_inicial, data_final = _periodo_raster_evento_fim()
+    if not data_inicial or not data_final:
+        data_inicial, data_final = _periodo_raster_evento_fim()
     payload: dict[str, Any] = {
         "DataInicial": data_inicial,
         "DataFinal": data_final,
+        "StatusViagem": _env("RASTER_EVENTO_FIM_STATUS", "T") or "T",
     }
-
-    status = _env("RASTER_EVENTO_FIM_STATUS", "T")
-    if status:
-        payload["StatusViagem"] = status
 
     placa = normalize_placa(_env("RASTER_EVENTO_FIM_PLACA", ""))
     if placa:
         payload["Placa"] = placa
 
     return payload
+
+
+def _evento_get(v: dict[str, Any], *names: str) -> Any:
+    return _pick(v, *names)
+
+
+def _viagem_row_from_evento(v: dict[str, Any]) -> dict[str, Any]:
+    status_checklist = str(_evento_get(v, "StatusChecklist") or "").upper().strip() or None
+    return {
+        "sequencial": to_int(_evento_get(v, "Sequencial")),
+        "cod_solicitacao": to_int(_evento_get(v, "CodSolicitacao")),
+        "cod_pre_solicitacao": to_int(_evento_get(v, "CodPreSolicitacao")),
+        "cod_filial": to_int(_evento_get(v, "CodFilial")),
+        "placa_veiculo": normalize_placa(_evento_get(v, "PlacaVeiculo")),
+        "vinc_veiculo": _evento_get(v, "VincVeiculo"),
+        "placa_carreta1": normalize_placa(_evento_get(v, "PlacaCarreta1")),
+        "vinc_carreta1": _evento_get(v, "VincCarreta1"),
+        "placa_carreta2": normalize_placa(_evento_get(v, "PlacaCarreta2")),
+        "vinc_carreta2": _evento_get(v, "VincCarreta2"),
+        "placa_carreta3": normalize_placa(_evento_get(v, "PlacaCarreta3")),
+        "vinc_carreta4": _evento_get(v, "VincCarreta4", "VincCarreta3"),
+        "cpf_motorista1": _evento_get(v, "CPFMotorista1"),
+        "vinc_motorista1": _evento_get(v, "VincMotorista1"),
+        "cpf_motorista2": _evento_get(v, "CPFMotorista2"),
+        "vinc_motorista2": _evento_get(v, "VincMotorista2"),
+        "cod_ibge_cidade_orig": to_int(_evento_get(v, "CodIBGECidadeOrig")),
+        "cod_ibge_cidade_dest": to_int(_evento_get(v, "CodIBGECidadeDest")),
+        "cnpj_cliente_orig": _evento_get(v, "CNPJClienteOrig"),
+        "cnpj_cliente_dest": _evento_get(v, "CNPJClienteDest"),
+        "data_hora_prev_ini": parse_ts(_evento_get(v, "DataHoraPrevIni")),
+        "data_hora_prev_fim": parse_ts(_evento_get(v, "DataHoraPrevFim")),
+        "status_viagem": _evento_get(v, "StatusViagem"),
+        "data_hora_real_ini": parse_ts(_evento_get(v, "DataHoraRealIni")),
+        "data_hora_real_fim": parse_ts(_evento_get(v, "DataHoraRealFim")),
+        "status_engate": _evento_get(v, "StatusEngate"),
+        "status_detalhamento": _evento_get(v, "StatusDetalhamento"),
+        "status_rota": _evento_get(v, "StatusRota"),
+        "status_checklist": status_checklist,
+        "aptidao_operacional": classificar_aptidao(status_checklist),
+        "status_liberacao_engate": _evento_get(v, "StatusLiberacaoEngate"),
+        "status_localiz_secund": _evento_get(v, "StatusLocalizSecund"),
+        "status_localiz_avulso": _evento_get(v, "StatusLocalizAvulso"),
+        "status_escolta_armada": _evento_get(v, "StatusEscoltaArmada"),
+        "status_escolta_velada": _evento_get(v, "StatusEscoltaVelada"),
+        "dentro_prazo": _evento_get(v, "DentroPrazo"),
+        "percentual_atraso": to_float(_evento_get(v, "PercentualAtraso")),
+        "velocidade_media": to_float(_evento_get(v, "VelocidadeMedia")),
+        "maior_velocidade": to_float(_evento_get(v, "MaiorVelocidade")),
+        "local_maior_velocidade": _evento_get(v, "LocalMaiorVelocidade"),
+        "latitude_maior_velocidade": to_float(_evento_get(v, "LatitudeMaiorVelocidade")),
+        "longitude_maior_velocidade": to_float(_evento_get(v, "LongitudeMaiorVelocidade")),
+        "tempo_total_viagem": to_float(_evento_get(v, "TempoTotalViagem")),
+        "tempo_parado": to_float(_evento_get(v, "TempoParado")),
+        "tempo_movimentando": to_float(_evento_get(v, "TempoMovimentando")),
+        "percentual_movimentando": to_float(_evento_get(v, "PercentualMovimentando")),
+        "maior_tempo_movimentando": to_int(_evento_get(v, "MaiorTempoMovimentando")),
+        "dia_maior_tempo_movimentando": to_int(_evento_get(v, "DiaMaiorTempoMovimentando")),
+        "perc_maior_tempo_movimentando": to_float(_evento_get(v, "PercMaiorTempoMovimentando")),
+        "tempo_parado_area_risco": to_int(_evento_get(v, "TempoParadoAreaRisco")),
+        "tempo_parado_alvos": to_int(_evento_get(v, "TempoParadoAlvos")),
+        "percentual_pernoite": to_float(_evento_get(v, "PercentualPernoite")),
+        "menor_pernoite": to_int(_evento_get(v, "MenorPernoite")),
+        "botao_panico": to_int(_evento_get(v, "BotaoPanico")),
+        "eficiencia_temperatura": to_float(_evento_get(v, "EficienciaTemperatura")),
+        "eventos_velocidade": to_int(_evento_get(v, "EventosVelocidade")),
+        "paradas_area_risco": to_int(_evento_get(v, "ParadasAreaRisco")),
+        "desvios_de_rota": to_int(_evento_get(v, "DesviosDeRota")),
+        "desvios_rota": to_int(_evento_get(v, "DesviosDeRota")),
+        "sem_posicao": to_int(_evento_get(v, "SemPosicao")),
+        "rodou_fora_horario": _evento_get(v, "RodouForaHorario"),
+        "violacao_painel": to_int(_evento_get(v, "ViolacaoPainel")),
+        "violacao_antena": to_int(_evento_get(v, "ViolacaoAntena")),
+        "desengate": to_int(_evento_get(v, "Desengate")),
+        "link_timeline": _evento_get(v, "LinkTimeLine", "LinkTimeline"),
+        "ultima_temperatura": _evento_get(v, "UltimaTemperatura"),
+        "razao_transportador": _evento_get(v, "RazaoTransportador"),
+        "fantasia_transportador": _evento_get(v, "FantasiaTransportador"),
+        "cnpj_transportador": _evento_get(v, "CNPJTransportador"),
+        "razao_proprietario": _evento_get(v, "RazaoProprietario"),
+        "fantasia_proprietario": _evento_get(v, "FantasiaProprietario"),
+        "cnpj_proprietario": _evento_get(v, "CNPJProprietario"),
+        "data_hora_identificou_fim_viagem": parse_ts(_evento_get(v, "DataHoraIdentificouFimViagem")),
+        "data_prev_inicio": parse_ts(_evento_get(v, "DataHoraPrevIni")),
+        "data_prev_fim": parse_ts(_evento_get(v, "DataHoraPrevFim")),
+        "data_real_inicio": parse_ts(_evento_get(v, "DataHoraRealIni")),
+        "data_real_fim": parse_ts(_evento_get(v, "DataHoraRealFim")),
+        "raw": v,
+        "synced_at": now_iso(),
+    }
+
+
+def _coletas_from_viagem(v: dict[str, Any]) -> list[dict[str, Any]]:
+    return _list_from(v, "ColetasEntregas", "ColetaEntrega", "Coletas", "Entregas")
+
+
+def _coleta_row_from_evento(cod: int, cod_pre: int | None, placa_viagem: str | None, coleta: dict[str, Any], idx: int) -> dict[str, Any]:
+    return {
+        "chave": _safe_key("coleta", cod, _pick(coleta, "Ordem") or idx, _pick(coleta, "Tipo")),
+        "cod_solicitacao": cod,
+        "cod_pre_solicitacao": cod_pre,
+        "placa_viagem": placa_viagem,
+        "placa_veiculo": normalize_placa(_pick(coleta, "PlacaVeiculo")) or placa_viagem,
+        "ordem": to_int(_pick(coleta, "Ordem")) or idx,
+        "tipo": _pick(coleta, "Tipo"),
+        "cod_ibge_cidade": to_int(_pick(coleta, "CodIBGECidade")),
+        "cnpj_cliente": _pick(coleta, "CNPJCliente"),
+        "data_hora_prev_chegada": parse_ts(_pick(coleta, "DataHoraPrevChegada")),
+        "data_hora_prev_saida": parse_ts(_pick(coleta, "DataHoraPrevSaida")),
+        "data_hora_real_chegada": parse_ts(_pick(coleta, "DataHoraRealChegada")),
+        "data_hora_real_saida": parse_ts(_pick(coleta, "DataHoraRealSaida")),
+        "data_hora_calculada_chegada": parse_ts(_pick(coleta, "DataHoraCalculadaChegada")),
+        "latitude": to_float(_pick(coleta, "Latitude")),
+        "longitude": to_float(_pick(coleta, "Longitude")),
+        "dentro_prazo": _pick(coleta, "DentroPrazo"),
+        "diferenca_tempo": _pick(coleta, "DiferencaTempo"),
+        "eficiencia_temperatura": to_float(_pick(coleta, "EficienciaTemperatura")),
+        "percentual_percorrido": to_float(_pick(coleta, "PercentualPercorrido")),
+        "percentual_restante": to_float(_pick(coleta, "PercentualRestante")),
+        "km_restante_entrega": to_float(_pick(coleta, "KmRestanteEntrega")),
+        "km_percorrido_entrega": to_float(_pick(coleta, "KmPercorridoEntrega")),
+        "chegou_na_entrega": _pick(coleta, "ChegouNaEntrega"),
+        "distancia_rota": to_float(_pick(coleta, "DistanciaRota")),
+        "data_hora_ultima_posicao": parse_ts(_pick(coleta, "DataHoraUltimaPosicao")),
+        "latitude_ultima_posicao": to_float(_pick(coleta, "LatitudeUltimaPosicao")),
+        "longitude_ultima_posicao": to_float(_pick(coleta, "LongitudeUltimaPosicao")),
+        "referencia_ultima_posicao": _pick(coleta, "ReferenciaUltimaPosicao"),
+        "raw": coleta,
+        "synced_at": now_iso(),
+    }
+
+
+def _pernoites_from_viagem(v: dict[str, Any]) -> list[dict[str, Any]]:
+    return _list_from(v, "Pernoites", "Pernoite")
+
+
+def _pernoite_row_from_evento(cod: int, cod_pre: int | None, pernoite: dict[str, Any], idx: int) -> dict[str, Any]:
+    return {
+        "chave": _safe_key("pernoite", cod, idx, _pick(pernoite, "DataHoraInicial"), _pick(pernoite, "DataHoraFinal")),
+        "cod_solicitacao": cod,
+        "cod_pre_solicitacao": cod_pre,
+        "data_hora_inicial": parse_ts(_pick(pernoite, "DataHoraInicial")),
+        "data_hora_final": parse_ts(_pick(pernoite, "DataHoraFinal")),
+        "percentual_eficiencia": to_float(_pick(pernoite, "PercentualEficiencia")),
+        "raw": pernoite,
+        "synced_at": now_iso(),
+    }
+
+
+def _documentos_from_coleta(coleta: dict[str, Any]) -> list[dict[str, Any]]:
+    return _extract_documentos_status_viagem(coleta)
 
 
 def _resumo_erro_raster(data: dict[str, Any]) -> str:
@@ -343,112 +498,202 @@ def _resumo_erro_raster(data: dict[str, Any]) -> str:
         return str(data)[:6000]
 
 
-def sync_evento_fim_viagem() -> int:
-    rotina = "Evento fim viagem"
+def _evento_fim_max_por_chamada() -> int:
+    """Limite operacional da Raster para evitar travamento/corte do retorno."""
+    return max(50, min(to_int(_env("RASTER_EVENTO_FIM_MAX_POR_CHAMADA", "500")) or 500, 500))
+
+
+def _evento_fim_delay_seconds() -> float:
+    """Pequena pausa entre chamadas do getEventoFimViagem para não bater limite da Raster."""
     try:
-        payload = _evento_fim_payload()
-        data = call_raster("getEventoFimViagem", payload)
-        if not _ok(data):
-            erro = _resumo_erro_raster({
-                "mensagem": "Raster retornou erro em getEventoFimViagem",
-                "payload_enviado": payload,
-                "retorno_raster": data,
-            })
-            log_execucao(rotina, "erro", 0, erro)
-            print(erro)
-            return 0
+        return max(0.0, float(_env("RASTER_EVENTO_FIM_DELAY_SECONDS", "1") or 1))
+    except Exception:
+        return 1.0
 
-        viagens = _list_from(data, "Viagens", "Viagem")
-        rows: list[dict[str, Any]] = []
-        doc_rows: list[dict[str, Any]] = []
 
-        for v in viagens:
-            cod = to_int(v.get("CodSolicitacao"))
-            if not cod:
-                continue
-            status_checklist = str(v.get("StatusChecklist") or "").upper().strip() or None
-            placa_norm = normalize_placa(v.get("PlacaVeiculo"))
-            cod_pre = to_int(v.get("CodPreSolicitacao"))
-            chave_status = _safe_key("getEventoFimViagem", cod, cod_pre, placa_norm)
+def _date_from_iso(value: str) -> date:
+    return datetime.strptime(value, "%Y-%m-%d").date()
 
-            # Parser oficial dos documentos de viagem.
-            # A Raster confirmou que CARGA/CTE ficam aninhados em:
-            # SM -> ColetasEntregas -> Produtos -> Documentos.
-            # A função _extract_documentos_status_viagem varre recursivamente
-            # todo o retorno e captura Documentos em qualquer profundidade.
-            documentos_viagem = _extract_documentos_status_viagem(v)
-            for idx, doc in enumerate(documentos_viagem, start=1):
+
+def _split_periodo(data_inicial: str, data_final: str) -> tuple[tuple[str, str], tuple[str, str]] | None:
+    ini = _date_from_iso(data_inicial)
+    fim = _date_from_iso(data_final)
+    if ini >= fim:
+        return None
+    meio = ini + (fim - ini) // 2
+    return (ini.isoformat(), meio.isoformat()), ((meio + timedelta(days=1)).isoformat(), fim.isoformat())
+
+
+def _consultar_evento_fim_periodo_fracionado(
+    data_inicial: str,
+    data_final: str,
+    periodo_nome: str,
+    nivel: int = 0,
+    max_nivel: int = 8,
+) -> list[tuple[str, str, str, list[dict[str, Any]], dict[str, Any]]]:
+    """Consulta getEventoFimViagem respeitando o limite de 500 registros.
+
+    A Raster pode cortar/travar quando o período retorna registros demais. Por isso:
+    - consulta mês anterior e mês atual;
+    - se uma chamada vier com 500 registros ou mais, divide o período ao meio;
+    - repete até ficar abaixo do limite ou chegar em dia único;
+    - mantém StatusViagem=T para trazer tudo.
+    """
+    payload = _evento_fim_payload(data_inicial, data_final)
+    data = call_raster("getEventoFimViagem", payload)
+
+    if not _ok(data):
+        raise RuntimeError(_resumo_erro_raster({
+            "mensagem": "Raster retornou erro em getEventoFimViagem",
+            "periodo": periodo_nome,
+            "payload_enviado": payload,
+            "retorno_raster": data,
+        }))
+
+    viagens = _list_from(data, "Viagens", "Viagem")
+    max_por_chamada = _evento_fim_max_por_chamada()
+
+    # Se bateu no limite, pode ter mais registros não retornados. Divide o período e consulta de novo.
+    if len(viagens) >= max_por_chamada and nivel < max_nivel:
+        partes = _split_periodo(data_inicial, data_final)
+        if partes:
+            time.sleep(_evento_fim_delay_seconds())
+            saida: list[tuple[str, str, str, list[dict[str, Any]], dict[str, Any]]] = []
+            for idx, (ini, fim) in enumerate(partes, start=1):
+                sub_nome = f"{periodo_nome}_parte{idx}_n{nivel + 1}"
+                saida.extend(_consultar_evento_fim_periodo_fracionado(ini, fim, sub_nome, nivel + 1, max_nivel))
+                time.sleep(_evento_fim_delay_seconds())
+            return saida
+
+    # Dia único ainda veio no limite: processa mesmo assim e deixa alerta no log.
+    if len(viagens) >= max_por_chamada:
+        log_execucao(
+            f"Evento fim viagem {periodo_nome}",
+            "alerta",
+            len(viagens),
+            f"Retorno com {len(viagens)} viagem(ns) no período {data_inicial} a {data_final}. Limite Raster={max_por_chamada}; pode existir corte no retorno se houver mais registros."
+        )
+
+    return [(data_inicial, data_final, periodo_nome, viagens, payload)]
+
+
+def _salvar_evento_fim_viagens(
+    viagens: list[dict[str, Any]],
+    data_inicial: str,
+    data_final: str,
+    periodo_nome: str,
+) -> int:
+    rows: list[dict[str, Any]] = []
+    coletas_rows: list[dict[str, Any]] = []
+    doc_rows: list[dict[str, Any]] = []
+    pernoite_rows: list[dict[str, Any]] = []
+
+    for v in viagens:
+        cod = to_int(_pick(v, "CodSolicitacao"))
+        if not cod:
+            continue
+        row = _viagem_row_from_evento(v)
+        row["periodo_consulta"] = periodo_nome
+        row["data_inicial_consulta"] = data_inicial
+        row["data_final_consulta"] = data_final
+        rows.append(row)
+
+        cod_pre = to_int(_pick(v, "CodPreSolicitacao"))
+        placa_norm = normalize_placa(_pick(v, "PlacaVeiculo"))
+        chave_status = _safe_key("getEventoFimViagem", periodo_nome, cod, cod_pre, placa_norm)
+
+        coletas = _coletas_from_viagem(v)
+        encontrou_doc_na_coleta = False
+        for idx, coleta in enumerate(coletas, start=1):
+            ordem = to_int(_pick(coleta, "Ordem")) or idx
+            tipo_coleta = _pick(coleta, "Tipo")
+            coletas_rows.append(_coleta_row_from_evento(cod, cod_pre, placa_norm, coleta, idx))
+            for d_idx, doc in enumerate(_documentos_from_coleta(coleta), start=1):
+                tipo_doc = str(doc.get("tipo") or "").upper().strip() or None
+                numero_doc = str(doc.get("numero") or "").strip() or None
+                if not numero_doc:
+                    continue
+                encontrou_doc_na_coleta = True
+                doc_rows.append({
+                    "chave": _safe_key("getEventoFimViagem", cod, ordem, tipo_coleta, tipo_doc, numero_doc, d_idx),
+                    "chave_status_viagem": chave_status,
+                    "cod_solicitacao": cod,
+                    "cod_pre_solicitacao": cod_pre,
+                    "placa_veiculo": placa_norm,
+                    "ordem_coleta_entrega": ordem,
+                    "tipo_coleta_entrega": tipo_coleta,
+                    "cnpj_cliente_coleta_entrega": _pick(coleta, "CNPJCliente"),
+                    "tipo": tipo_doc,
+                    "numero": numero_doc,
+                    "origem": doc.get("origem") or "getEventoFimViagem:ColetasEntregas.Documentos",
+                    "raw": doc.get("raw") or doc,
+                    "synced_at": now_iso(),
+                })
+
+        if not encontrou_doc_na_coleta:
+            for d_idx, doc in enumerate(_extract_documentos_status_viagem(v), start=1):
                 tipo_doc = str(doc.get("tipo") or "").upper().strip() or None
                 numero_doc = str(doc.get("numero") or "").strip() or None
                 if not numero_doc:
                     continue
                 doc_rows.append({
-                    "chave": _safe_key("getEventoFimViagem", cod, cod_pre, placa_norm, tipo_doc, numero_doc, idx),
+                    "chave": _safe_key("getEventoFimViagem", cod, "fallback", tipo_doc, numero_doc, d_idx),
                     "chave_status_viagem": chave_status,
                     "cod_solicitacao": cod,
                     "cod_pre_solicitacao": cod_pre,
                     "placa_veiculo": placa_norm,
                     "tipo": tipo_doc,
                     "numero": numero_doc,
-                    "origem": doc.get("origem") or "getEventoFimViagem:ColetasEntregas.Produtos.Documentos",
+                    "origem": doc.get("origem") or "getEventoFimViagem:FallbackDocumentos",
                     "raw": doc.get("raw") or doc,
                     "synced_at": now_iso(),
                 })
 
-            rows.append({
-                "cod_solicitacao": cod,
-                "cod_filial": to_int(v.get("CodFilial")),
-                "placa_veiculo": normalize_placa(v.get("PlacaVeiculo")),
-                "placa_carreta1": normalize_placa(v.get("PlacaCarreta1")),
-                "cpf_motorista1": v.get("CPFMotorista1"),
-                "status_viagem": v.get("StatusViagem"),
-                "status_checklist": status_checklist,
-                "aptidao_operacional": classificar_aptidao(status_checklist),
-                "status_engate": v.get("StatusEngate"),
-                "status_detalhamento": v.get("StatusDetalhamento"),
-                "status_rota": v.get("StatusRota"),
-                "status_liberacao_engate": v.get("StatusLiberacaoEngate"),
-                "dentro_prazo": v.get("DentroPrazo"),
-                "data_prev_inicio": parse_ts(v.get("DataHoraPrevIni")),
-                "data_prev_fim": parse_ts(v.get("DataHoraPrevFim")),
-                "data_real_inicio": parse_ts(v.get("DataHoraRealIni")),
-                "data_real_fim": parse_ts(v.get("DataHoraRealFim")),
-                "velocidade_media": to_float(v.get("VelocidadeMedia")),
-                "maior_velocidade": to_float(v.get("MaiorVelocidade")),
-                "tempo_total_viagem": to_float(v.get("TempoTotalViagem")),
-                "tempo_parado": to_float(v.get("TempoParado")),
-                "tempo_movimentando": to_float(v.get("TempoMovimentando")),
-                "percentual_atraso": to_float(v.get("PercentualAtraso")),
-                "desvios_rota": to_int(v.get("DesviosDeRota")),
-                "eventos_velocidade": to_int(v.get("EventosVelocidade")),
-                "link_timeline": v.get("LinkTimeLine"),
-                "synced_at": now_iso(),
+        for p_idx, pernoite in enumerate(_pernoites_from_viagem(v), start=1):
+            pernoite_rows.append(_pernoite_row_from_evento(cod, cod_pre, pernoite, p_idx))
+
+    total = upsert_rows("raster_evento_fim_viagem", rows, "cod_solicitacao") if rows else 0
+    total_coletas = upsert_rows("raster_evento_fim_viagem_coletas", coletas_rows, "chave") if coletas_rows else 0
+    total_docs = upsert_rows("raster_status_viagem_documentos", doc_rows, "chave") if doc_rows else 0
+    total_pernoites = upsert_rows("raster_evento_fim_viagem_pernoites", pernoite_rows, "chave") if pernoite_rows else 0
+    return total + total_coletas + total_docs + total_pernoites
+
+
+def sync_evento_fim_viagem() -> int:
+    rotina = "Evento fim viagem"
+    total_geral = 0
+    erros: list[str] = []
+
+    for data_inicial, data_final, periodo_nome in _periodos_evento_fim_mes_anterior_e_atual():
+        try:
+            lotes = _consultar_evento_fim_periodo_fracionado(data_inicial, data_final, periodo_nome)
+            for ini_lote, fim_lote, nome_lote, viagens, payload in lotes:
+                total_periodo = _salvar_evento_fim_viagens(viagens, ini_lote, fim_lote, nome_lote)
+                total_geral += total_periodo
+                log_execucao(
+                    f"{rotina} {nome_lote}",
+                    "sucesso",
+                    total_periodo,
+                    f"payload={json.dumps(payload, ensure_ascii=False)} viagens_retornadas={len(viagens)} limite_por_chamada={_evento_fim_max_por_chamada()}"
+                )
+                time.sleep(_evento_fim_delay_seconds())
+        except Exception as exc:
+            payload = _evento_fim_payload(data_inicial, data_final)
+            erro = _resumo_erro_raster({
+                "mensagem": "Exception em getEventoFimViagem",
+                "periodo": periodo_nome,
+                "payload_enviado": payload,
+                "erro": str(exc),
             })
+            log_execucao(f"{rotina} {periodo_nome}", "erro", 0, erro)
+            print(erro)
+            erros.append(erro)
+            continue
 
-        total = upsert_rows("raster_evento_fim_viagem", rows, "cod_solicitacao")
-
-        # Salva também os documentos vinculados à viagem/SM encontrados no retorno
-        # do getEventoFimViagem. Isso permite montar base por CARGA/CTE sem depender
-        # de vínculo manual e sem criar/alterar nada na Raster.
-        total_docs = 0
-        if doc_rows:
-            try:
-                total_docs = upsert_rows("raster_status_viagem_documentos", doc_rows, "chave")
-            except Exception as exc_docs:
-                log_execucao("Evento fim viagem documentos", "erro", 0, str(exc_docs))
-                print("Erro ao salvar documentos do getEventoFimViagem:", exc_docs)
-
-        log_execucao(rotina, "sucesso", total + total_docs)
-        return total + total_docs
-    except Exception as exc:
-        erro = _resumo_erro_raster({
-            "mensagem": "Exception em getEventoFimViagem",
-            "payload_enviado": _evento_fim_payload(),
-            "erro": str(exc),
-        })
-        log_execucao(rotina, "erro", 0, erro)
-        print(erro)
+    if total_geral == 0 and erros:
         return 0
+    log_execucao(rotina, "sucesso", total_geral, f"Consulta fracionada ativa. Limite por chamada={_evento_fim_max_por_chamada()}")
+    return total_geral
 
 
 def _coletar_placas_raster_status(limite: int = 50) -> list[str]:
